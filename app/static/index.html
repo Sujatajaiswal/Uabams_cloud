@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UABAMS Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -91,17 +91,21 @@
     </section>
 
     <section id="alerts" class="panel">
-      <div class="section-head"><h2>Open Map Alerts</h2></div>
+      <div class="section-head"><h2>OpenStreetMap Alert View</h2></div>
+      <div class="alert-summary-grid">
+        <div class="alert-summary total"><span>Total Alerts</span><strong id="alertTotal">0</strong></div>
+        <div class="alert-summary red"><span>Red Alerts</span><strong id="alertRed">0</strong></div>
+        <div class="alert-summary yellow"><span>Yellow Alerts</span><strong id="alertYellow">0</strong></div>
+        <div class="alert-summary green"><span>Green Alerts</span><strong id="alertGreen">0</strong></div>
+      </div>
       <div class="map-pair">
         <article class="map-card">
-          <div class="gateway-title"><span>GW1 Map</span><span id="gw1MapState" class="badge offline">-</span></div>
-          <div class="route-map" id="mapGw1"></div>
-          <div id="popupGw1" class="map-popup"></div>
+          <div class="gateway-title"><span>GW1 Route Map</span><span id="gw1MapState" class="badge offline">-</span></div>
+          <div class="route-map leaflet-map" id="mapGw1"></div>
         </article>
         <article class="map-card">
-          <div class="gateway-title"><span>GW2 Map</span><span id="gw2MapState" class="badge offline">-</span></div>
-          <div class="route-map" id="mapGw2"></div>
-          <div id="popupGw2" class="map-popup"></div>
+          <div class="gateway-title"><span>GW2 Route Map</span><span id="gw2MapState" class="badge offline">-</span></div>
+          <div class="route-map leaflet-map" id="mapGw2"></div>
         </article>
       </div>
       <div class="map-legend">
@@ -144,7 +148,7 @@
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

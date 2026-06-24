@@ -75,50 +75,50 @@ function archiveCountFor(archives, gatewayId) {
 }
 
 function initializeMaps() {
-  if (!window.ol) {
+  if (!window.L) {
     gatewayIds.forEach((id) => {
       const target = id === 'GW_UABAMS_BOGIE_02' ? 'mapGw2' : 'mapGw1';
-      $(target).innerHTML = '<div class="empty-state">OpenLayers failed to load</div>';
+      $(target).innerHTML = '<div class="empty-state">Leaflet map failed to load</div>';
     });
     return;
   }
 
   const config = [
-    { gatewayId: 'GW_UABAMS_BOGIE_01', target: 'mapGw1', popup: 'popupGw1' },
-    { gatewayId: 'GW_UABAMS_BOGIE_02', target: 'mapGw2', popup: 'popupGw2' },
+    { gatewayId: 'GW_UABAMS_BOGIE_01', target: 'mapGw1' },
+    { gatewayId: 'GW_UABAMS_BOGIE_02', target: 'mapGw2' },
   ];
 
-  config.forEach(({ gatewayId, target, popup }) => {
-    maps[gatewayId] = new ol.Map({
-      target,
-      layers: [new ol.layer.Tile({ source: new ol.source.OSM() })],
-      view: new ol.View({ center: ol.proj.fromLonLat([78.9629, 20.5937]), zoom: 5 }),
-    });
-
-    overlays[gatewayId] = new ol.Overlay({
-      element: $(popup),
-      positioning: 'bottom-center',
-      stopEvent: false,
-      offset: [0, -12],
-    });
-    maps[gatewayId].addOverlay(overlays[gatewayId]);
-    maps[gatewayId].on('click', (event) => showMapPopup(gatewayId, event));
+  config.forEach(({ gatewayId, target }) => {
+    maps[gatewayId] = L.map(target, { zoomControl: true }).setView([22.9734, 78.6569], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(maps[gatewayId]);
+    layers[gatewayId] = L.layerGroup().addTo(maps[gatewayId]);
   });
 }
 
-function showMapPopup(gatewayId, event) {
-  const popupId = gatewayId === 'GW_UABAMS_BOGIE_02' ? 'popupGw2' : 'popupGw1';
-  const popup = $(popupId);
-  const feature = maps[gatewayId].forEachFeatureAtPixel(event.pixel, (item) => item);
-  if (!feature) {
-    popup.style.display = 'none';
-    return;
-  }
-  popup.innerHTML = `<strong>${feature.get('alertType')}</strong><br>${gatewayLabels[gatewayId]}<br>Peak: ${feature.get('peakG')} G`;
-  popup.style.display = 'block';
-  overlays[gatewayId].setPosition(feature.getGeometry().getCoordinates());
+function jitteredPoint(alert, index) {
+  const lat = Number(alert.latitude);
+  const lon = Number(alert.longitude);
+  const offset = index * 0.0015;
+  return [lat + offset, lon + offset];
 }
 
+function markerPopup(alert, index) {
+  const positionKm = Number.isFinite(Number(alert.positionMm)) ? `${(Number(alert.positionMm) / 1000).toFixed(2)} km` : '-';
+  const speed = Number.isFinite(Number(alert.speedKmph)) ? `${alert.speedKmph} km/h` : '-';
+  return `
+    <div class="leaflet-popup-content-box">
+      <strong>${alert.alert || 'Alert'} - ${gatewayLabels[alert.gatewayId] || alert.gatewayId}</strong><br>
+      <span>Time:</span> ${formatDate(alert.createdAt)}<br>
+      <span>Peak:</span> ${alert.peakValueG ?? '-'} G<br>
+      <span>Speed:</span> ${speed}<br>
+      <span>Position:</span> ${positionKm}<br>
+      <span>Location:</span> ${alert.latitude}, ${alert.longitude}
+    </div>
+  `;
+}
 function renderDashboard(data) {
   state.dashboard = data;
   const train = data.train || {};
@@ -164,10 +164,21 @@ function renderDashboard(data) {
     `;
   }).join('');
 
+  renderAlertSummary(alerts);
   renderAlerts(alerts);
   renderMaps(alerts, gateways);
   renderArchives(archives);
   renderSession(activeSession, train.trainNo);
+}
+
+function renderAlertSummary(alerts) {
+  const red = alerts.filter((alert) => alert.alert === 'RED').length;
+  const yellow = alerts.filter((alert) => alert.alert === 'YELLOW').length;
+  const green = alerts.filter((alert) => alert.alert === 'GREEN').length;
+  $('alertTotal').textContent = alerts.length;
+  $('alertRed').textContent = red;
+  $('alertYellow').textContent = yellow;
+  $('alertGreen').textContent = green;
 }
 
 function renderAlerts(alerts) {
@@ -185,40 +196,53 @@ function renderAlerts(alerts) {
 function renderMaps(alerts, gateways) {
   gatewayIds.forEach((gatewayId) => {
     const map = maps[gatewayId];
-    if (!map || !window.ol) return;
-    if (layers[gatewayId]) map.removeLayer(layers[gatewayId]);
+    if (!map || !window.L) return;
+    layers[gatewayId].clearLayers();
 
-    const gatewayAlerts = alerts.filter((alert) => alert.gatewayId === gatewayId && Number.isFinite(Number(alert.latitude)) && Number.isFinite(Number(alert.longitude)));
-    const features = gatewayAlerts.map((alert) => new ol.Feature({
-      geometry: new ol.geom.Point(ol.proj.fromLonLat([Number(alert.longitude), Number(alert.latitude)])),
-      peakG: alert.peakValueG,
-      alertType: alert.alert,
-      gatewayId: alert.gatewayId,
-    }));
+    const gatewayAlerts = alerts
+      .filter((alert) => alert.gatewayId === gatewayId && Number.isFinite(Number(alert.latitude)) && Number.isFinite(Number(alert.longitude)))
+      .slice()
+      .reverse();
 
-    layers[gatewayId] = new ol.layer.Vector({
-      source: new ol.source.Vector({ features }),
-      style: (feature) => new ol.style.Style({
-        image: new ol.style.Circle({
-          radius: 8,
-          fill: new ol.style.Fill({ color: alertColor(feature.get('alertType')) }),
-          stroke: new ol.style.Stroke({ color: 'white', width: 2 }),
-        }),
-      }),
-    });
-    map.addLayer(layers[gatewayId]);
-
-    const gw = gateways.find((item) => item.gatewayId === gatewayId);
     const stateId = gatewayId === 'GW_UABAMS_BOGIE_02' ? 'gw2MapState' : 'gw1MapState';
+    const gw = gateways.find((item) => item.gatewayId === gatewayId);
     $(stateId).textContent = gw?.online ? 'Online' : 'Offline';
     $(stateId).className = `badge ${gw?.online ? 'online' : 'offline'}`;
 
-    if (features.length) {
-      map.getView().fit(layers[gatewayId].getSource().getExtent(), { padding: [40, 40, 40, 40], maxZoom: 13, duration: 250 });
+    if (!gatewayAlerts.length) {
+      map.setView([22.9734, 78.6569], 5);
+      return;
+    }
+
+    const points = gatewayAlerts.map((alert, index) => jitteredPoint(alert, index));
+    if (points.length > 1) {
+      L.polyline(points, {
+        color: '#111827',
+        weight: 4,
+        opacity: 0.75,
+        dashArray: '8 8',
+      }).addTo(layers[gatewayId]);
+    }
+
+    gatewayAlerts.forEach((alert, index) => {
+      const point = points[index];
+      L.circleMarker(point, {
+        radius: alert.alert === 'RED' ? 9 : 7,
+        color: '#ffffff',
+        weight: 2,
+        fillColor: alertColor(alert.alert),
+        fillOpacity: 0.95,
+      })
+        .addTo(layers[gatewayId])
+        .bindPopup(markerPopup(alert, index));
+    });
+
+    const bounds = L.latLngBounds(points);
+    if (bounds.isValid()) {
+      map.fitBounds(bounds.pad(0.35), { maxZoom: 13 });
     }
   });
 }
-
 function renderArchives(archives) {
   $('archiveTable').innerHTML = archives.length ? archives.map((archive) => `
     <tr>
@@ -391,7 +415,7 @@ function selectTab(tabId) {
   document.querySelectorAll('.tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('active', panel.id === tabId));
   if (tabId === 'alerts') {
-    setTimeout(() => gatewayIds.forEach((gatewayId) => maps[gatewayId]?.updateSize()), 80);
+    setTimeout(() => gatewayIds.forEach((gatewayId) => maps[gatewayId]?.invalidateSize()), 120);
   }
 }
 
@@ -406,3 +430,7 @@ function boot() {
 }
 
 boot();
+
+
+
+

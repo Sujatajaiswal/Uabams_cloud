@@ -49,7 +49,7 @@ X-Admin-Key
 - Online gateway boxes show green, offline boxes show red
 - Calibration split into GW1 and GW2 panels
 - Calibration save is blocked until "Destination reached" is selected
-- Alert screen uses OpenLayers + OpenStreetMap with separate maps for GW1 and GW2
+- Alert screen uses Leaflet + OpenStreetMap with separate maps for GW1 and GW2
 - Archive upload history with SHA-256
 - Protected reset session screen
 
@@ -67,3 +67,4 @@ ADMIN_RESET_KEY
 ```
 
 Do not commit `.env`.
+

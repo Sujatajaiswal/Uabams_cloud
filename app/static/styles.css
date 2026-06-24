@@ -377,3 +377,38 @@ code { font-family: Consolas, monospace; font-size: 13px; }
 @media (max-width: 760px) {
   .compact-form, .gateway-kpis { grid-template-columns: 1fr; }
 }
+
+.alert-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.alert-summary {
+  min-height: 74px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #111827;
+  color: white;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+.alert-summary span { color: #cbd5e1; font-weight: 700; font-size: 13px; }
+.alert-summary strong { font-size: 28px; }
+.alert-summary.red { box-shadow: inset 5px 0 0 var(--red); }
+.alert-summary.yellow { box-shadow: inset 5px 0 0 var(--yellow); }
+.alert-summary.green { box-shadow: inset 5px 0 0 var(--green); }
+.alert-summary.total { box-shadow: inset 5px 0 0 var(--blue); }
+.leaflet-map {
+  height: 430px;
+  background: #dbeafe;
+}
+.leaflet-popup-content-box span { color: #64748b; font-weight: 700; }
+@media (max-width: 1050px) {
+  .alert-summary-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+}
+@media (max-width: 760px) {
+  .alert-summary-grid { grid-template-columns: 1fr; }
+}
