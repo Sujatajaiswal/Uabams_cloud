@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+app/__pycache__/
+app/middleware/__pycache__/
+.venv/
+venv/
+archive-smoke-test.bin

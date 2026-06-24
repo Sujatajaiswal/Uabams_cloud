@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UABAMS Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>UABAMS</h1>
+      <p>Vande Bharat gateway monitoring console</p>
+    </div>
+    <div class="header-actions">
+      <a href="/docs">Swagger</a>
+      <div class="status-pill" id="apiStatus">API ready</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="toolbar" aria-label="Train search and credentials">
+      <label>
+        Train No
+        <input id="trainNo" value="019456" autocomplete="off">
+      </label>
+      <label>
+        GW1 API Key
+        <input id="apiKeyGw1" type="password" autocomplete="off" placeholder="GW1 key">
+      </label>
+      <label>
+        GW2 API Key
+        <input id="apiKeyGw2" type="password" autocomplete="off" placeholder="GW2 key">
+      </label>
+      <label>
+        Admin Key
+        <input id="adminKey" type="password" autocomplete="off" placeholder="Reset key">
+      </label>
+      <button id="searchBtn" class="primary">Update</button>
+    </section>
+
+    <section class="train-band">
+      <div>
+        <span>Active Train</span>
+        <strong id="heroTrain">019456</strong>
+      </div>
+      <div>
+        <span>Service</span>
+        <strong>Vande Bharat</strong>
+      </div>
+      <div>
+        <span>Gateway Pair</span>
+        <strong>GW1 + GW2</strong>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="Dashboard sections">
+      <button class="tab active" data-tab="overview">Dashboard</button>
+      <button class="tab" data-tab="calibration">Calibration</button>
+      <button class="tab" data-tab="alerts">Alerts</button>
+      <button class="tab" data-tab="archives">Archives</button>
+      <button class="tab" data-tab="reset">Reset</button>
+    </nav>
+
+    <section id="overview" class="panel active">
+      <div class="summary-grid">
+        <div class="metric"><span>Train No</span><strong id="summaryTrain">-</strong></div>
+        <div class="metric"><span>Status</span><strong id="summaryStatus">-</strong></div>
+        <div class="metric"><span>Gateways Online</span><strong id="summaryGateways">-</strong></div>
+        <div class="metric"><span>Last Data</span><strong id="summaryLastData">-</strong></div>
+        <div class="metric"><span>Common / Different</span><strong id="summaryCompare">-</strong></div>
+        <div class="metric"><span>Archives</span><strong id="summaryArchives">-</strong></div>
+        <div class="metric"><span>Critical Alerts</span><strong id="summaryCritical">-</strong></div>
+        <div class="metric"><span>Latest Peak</span><strong id="summaryPeak">-</strong></div>
+      </div>
+
+      <div class="section-head"><h2>Gateway Status</h2></div>
+      <div id="gatewayList" class="gateway-grid two-col"></div>
+    </section>
+
+    <section id="calibration" class="panel">
+      <div class="section-head">
+        <h2>Gateway Calibration</h2>
+        <button id="loadAllCalibrationBtn">Load Both</button>
+      </div>
+      <div class="calibration-note">
+        Calibration is saved only after the train reaches the destination. If the train stops in between, keep calibration pending and do not send it to the gateway.
+      </div>
+      <div class="calibration-pair" id="calibrationPair"></div>
+    </section>
+
+    <section id="alerts" class="panel">
+      <div class="section-head"><h2>Open Map Alerts</h2></div>
+      <div class="map-pair">
+        <article class="map-card">
+          <div class="gateway-title"><span>GW1 Map</span><span id="gw1MapState" class="badge offline">-</span></div>
+          <div class="route-map" id="mapGw1"></div>
+          <div id="popupGw1" class="map-popup"></div>
+        </article>
+        <article class="map-card">
+          <div class="gateway-title"><span>GW2 Map</span><span id="gw2MapState" class="badge offline">-</span></div>
+          <div class="route-map" id="mapGw2"></div>
+          <div id="popupGw2" class="map-popup"></div>
+        </article>
+      </div>
+      <div class="map-legend">
+        <span class="dot GREEN"></span> Normal
+        <span class="dot YELLOW"></span> Warning
+        <span class="dot RED"></span> Critical
+      </div>
+      <div class="section-head"><h2>Alert Events</h2></div>
+      <div class="table-wrap compact-table">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Gateway</th><th>Peak G</th><th>Alert</th><th>Location</th></tr>
+          </thead>
+          <tbody id="alertsTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="archives" class="panel">
+      <div class="section-head"><h2>Archive Uploads</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Received</th><th>Gateway</th><th>Size</th><th>SHA-256</th><th>Status</th></tr>
+          </thead>
+          <tbody id="archiveTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="reset" class="panel">
+      <div class="reset-zone">
+        <div>
+          <h2>Reset Session</h2>
+          <p id="sessionText">No active session loaded.</p>
+        </div>
+        <button id="resetBtn" class="danger">Reset Train Session</button>
+      </div>
+      <pre id="resetOutput" class="output"></pre>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
