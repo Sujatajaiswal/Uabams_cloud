@@ -506,12 +506,30 @@ async def map_alerts(train_id: str):
 
 @app.get("/api/v1/map/rms")
 async def map_rms(train_id: str, gateway_id: str | None = None):
+    archive_query: dict[str, Any] = {"trainId": train_id, "rmsRecordCount": {"$gt": 0}}
+    if gateway_id:
+        archive_query["gatewayId"] = gateway_id
+
+    archives = await db.archives.find(
+        archive_query,
+        {"gatewayId": 1, "sha256": 1, "receivedAt": 1},
+    ).sort("receivedAt", -1).to_list(length=50)
+
+    latest_archive_by_gateway: dict[str, str] = {}
+    for archive in archives:
+        gateway = archive.get("gatewayId")
+        archive_sha = archive.get("sha256") or archive.get("archiveSha256")
+        if gateway and archive_sha and gateway not in latest_archive_by_gateway:
+            latest_archive_by_gateway[gateway] = archive_sha
+
     query: dict[str, Any] = {
         "trainId": train_id,
         "gpsValid": True,
         "latitude": {"$nin": [None, 0]},
         "longitude": {"$nin": [None, 0]},
     }
+    if latest_archive_by_gateway:
+        query["archiveSha256"] = {"$in": list(latest_archive_by_gateway.values())}
     if gateway_id:
         query["gatewayId"] = gateway_id
 
@@ -528,8 +546,9 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
             "positionMm": 1,
             "masterCount": 1,
             "createdAt": 1,
+            "archiveSha256": 1,
         },
-    ).sort("positionMm", 1).limit(5000).to_list(length=5000)
+    ).sort([("gatewayId", 1), ("positionMm", 1)]).limit(5000).to_list(length=5000)
 
     return [
         {
@@ -546,7 +565,6 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
         }
         for item in records
     ]
-
 @app.post("/api/v1/sessions/reset")
 async def reset_session(
     data: ResetSessionRequest,

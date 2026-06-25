@@ -270,7 +270,7 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
 
     fallbackRoute.forEach((point) => {
       L.circleMarker([Number(point.lat), Number(point.lon)], {
-        radius: normalizeAlert(point.color) === 'RED' ? 7 : 5,
+        radius: normalizeAlert(point.color) === 'RED' ? 6 : 5,
         color: '#ffffff',
         weight: 2,
         fillColor: alertColor(normalizeAlert(point.color)),
@@ -283,7 +283,7 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
     alertPoints.forEach((point, index) => {
       const markerPoint = jitterPoint(point.lat, point.lon, index);
       L.circleMarker(markerPoint, {
-        radius: normalizeAlert(point.color) === 'RED' ? 12 : 10,
+        radius: normalizeAlert(point.color) === 'RED' ? 13 : 11,
         color: '#111827',
         weight: 2,
         fillColor: alertColor(normalizeAlert(point.color)),
@@ -298,7 +298,7 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
       ...alertPoints.map((point, index) => jitterPoint(point.lat, point.lon, index)),
     ]);
     if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.25), { maxZoom: 16 });
+      map.fitBounds(bounds.pad(0.18), { maxZoom: 17 });
     }
   });
 }
