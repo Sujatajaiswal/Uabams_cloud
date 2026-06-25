@@ -218,63 +218,89 @@ function renderAlerts(alerts) {
   `).join('') : '<tr><td colspan="5">No alerts found.</td></tr>');
 }
 
+function pointInRouteBounds(point, routePoints, padding = 0.035) {
+  if (!routePoints.length) return true;
+  const lats = routePoints.map((item) => Number(item.lat));
+  const lons = routePoints.map((item) => Number(item.lon));
+  const minLat = Math.min(...lats) - padding;
+  const maxLat = Math.max(...lats) + padding;
+  const minLon = Math.min(...lons) - padding;
+  const maxLon = Math.max(...lons) + padding;
+  const lat = Number(point.lat);
+  const lon = Number(point.lon);
+  return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
+}
+
 function drawColoredRoute(layer, points) {
   if (!layer || points.length < 2) return;
   const latLngs = points.map((point) => [Number(point.lat), Number(point.lon)]);
   L.polyline(latLngs, {
-    color: '#3f2d2d',
-    weight: 12,
-    opacity: 0.42,
+    color: '#2f241f',
+    weight: 18,
+    opacity: 0.58,
+    lineCap: 'round',
+    lineJoin: 'round',
+    smoothFactor: 1.2,
   }).addTo(layer);
 
   for (let i = 1; i < points.length; i += 1) {
     const previous = points[i - 1];
     const current = points[i];
+    const severity = normalizeAlert(current.color);
     L.polyline(
       [[Number(previous.lat), Number(previous.lon)], [Number(current.lat), Number(current.lon)]],
       {
-        color: alertColor(normalizeAlert(current.color)),
-        weight: normalizeAlert(current.color) === 'RED' ? 8 : 7,
-        opacity: 0.94,
+        color: alertColor(severity),
+        weight: severity === 'RED' ? 13 : 12,
+        opacity: 0.96,
+        lineCap: 'round',
+        lineJoin: 'round',
+        smoothFactor: 1.2,
       }
     ).addTo(layer);
   }
 }
 
 function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
+  const validRmsPoints = rmsPoints
+    .filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)));
+
   gatewayIds.forEach((gatewayId) => {
     const map = maps[gatewayId];
     const layer = layers[gatewayId];
     if (!map || !layer || !window.L) return;
     layer.clearLayers();
 
-    const routePoints = rmsPoints
-      .filter((point) => point.gateway_id === gatewayId && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)));
-    const alertPoints = (mapAlerts.length ? mapAlerts : alerts.map(dashboardAlertToMapPoint))
+    const ownRoute = validRmsPoints.filter((point) => point.gateway_id === gatewayId);
+    const routePoints = ownRoute.length ? ownRoute : validRmsPoints;
+    const rawAlertPoints = (mapAlerts.length ? mapAlerts : alerts.map(dashboardAlertToMapPoint))
       .filter((point) => point.gateway_id === gatewayId && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)))
       .slice()
       .reverse();
-    const fallbackRoute = routePoints.length ? routePoints : alertPoints;
+    const alertPoints = routePoints.length > 1
+      ? rawAlertPoints.filter((point) => pointInRouteBounds(point, routePoints))
+      : rawAlertPoints;
 
     const stateId = gatewayId === 'GW_UABAMS_BOGIE_02' ? 'gw2MapState' : 'gw1MapState';
     const gw = gateways.find((item) => item.gatewayId === gatewayId);
     setText(stateId, gw?.online ? 'Online' : 'Offline');
     setClass(stateId, `badge ${gw?.online ? 'online' : 'offline'}`);
 
-    if (!fallbackRoute.length && !alertPoints.length) {
+    if (!routePoints.length && !alertPoints.length) {
       map.setView([22.9734, 78.6569], 5);
       return;
     }
 
-    drawColoredRoute(layer, fallbackRoute);
+    drawColoredRoute(layer, routePoints);
 
-    fallbackRoute.forEach((point) => {
+    routePoints.forEach((point, index) => {
+      if (index % 3 !== 0 && normalizeAlert(point.color) === 'GREEN') return;
       L.circleMarker([Number(point.lat), Number(point.lon)], {
-        radius: normalizeAlert(point.color) === 'RED' ? 6 : 5,
+        radius: normalizeAlert(point.color) === 'RED' ? 5 : 4,
         color: '#ffffff',
-        weight: 2,
+        weight: 1.5,
         fillColor: alertColor(normalizeAlert(point.color)),
-        fillOpacity: 0.94,
+        fillOpacity: 0.95,
       })
         .addTo(layer)
         .bindPopup(routePopup(point));
@@ -294,11 +320,11 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
     });
 
     const bounds = L.latLngBounds([
-      ...fallbackRoute.map((point) => [Number(point.lat), Number(point.lon)]),
+      ...routePoints.map((point) => [Number(point.lat), Number(point.lon)]),
       ...alertPoints.map((point, index) => jitterPoint(point.lat, point.lon, index)),
     ]);
     if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.18), { maxZoom: 17 });
+      map.fitBounds(bounds.pad(0.2), { maxZoom: 16 });
     }
   });
 }
