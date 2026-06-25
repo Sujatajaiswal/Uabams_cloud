@@ -293,18 +293,6 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
 
     drawColoredRoute(layer, routePoints);
 
-    routePoints.forEach((point, index) => {
-      if (index % 3 !== 0 && normalizeAlert(point.color) === 'GREEN') return;
-      L.circleMarker([Number(point.lat), Number(point.lon)], {
-        radius: normalizeAlert(point.color) === 'RED' ? 5 : 4,
-        color: '#ffffff',
-        weight: 1.5,
-        fillColor: alertColor(normalizeAlert(point.color)),
-        fillOpacity: 0.95,
-      })
-        .addTo(layer)
-        .bindPopup(routePopup(point));
-    });
 
     alertPoints.forEach((point, index) => {
       const markerPoint = jitterPoint(point.lat, point.lon, index);
