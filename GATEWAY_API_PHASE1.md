@@ -129,3 +129,14 @@ MongoDB collection: `calibration_versions`
 4. Fetch calibration after boot using `GET /api/v1/calibration/{gatewayId}`.
 5. Treat HTTP `2xx` as success. Treat `401`, `403`, `400`, `500` as failure.
 
+
+## Archive ZIP parsing
+
+When the gateway uploads a ZIP to `PUT /api/v1/archive`, the backend validates SHA-256, opens the ZIP, and parses these ICD files:
+
+- `session_metadata.json`
+- `rms/rms_25cm.bin` fixed 66-byte records
+- `peak/peak_50m.bin` fixed 302-byte records
+- `faults/faults.bin` fixed 75-byte records
+
+Parsed RMS records feed `/api/v1/map/rms`. Peak records with `alertGenerated=true` are also inserted as alert events for the dashboard.

@@ -50,9 +50,20 @@ X-Admin-Key
 - Calibration split into GW1 and GW2 panels
 - Calibration save is blocked until "Destination reached" is selected
 - Alert screen uses Leaflet + OpenStreetMap with separate maps for GW1 and GW2
-- Archive upload history with SHA-256
+- Archive upload history with parsed RMS/peak/fault counts
 - Protected reset session screen
 
+
+## Archive Parsing
+
+`PUT /api/v1/archive` now opens the uploaded ZIP and parses:
+
+- `session_metadata.json` for session identity/status
+- `rms/rms_25cm.bin` into `rms_records` for the route map
+- `peak/peak_50m.bin` into `peak_records`; generated peak alerts are inserted into `alert_events`
+- `faults/faults.bin` into `fault_records`
+
+The route maps call `GET /api/v1/map/rms?train_id=019456` and draw colored OpenStreetMap route points from parsed RMS records.
 ## Render Deployment
 
 Use `render.yaml`, then add these environment variables in Render:
@@ -67,4 +78,3 @@ ADMIN_RESET_KEY
 ```
 
 Do not commit `.env`.
-

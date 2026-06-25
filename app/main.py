@@ -20,6 +20,7 @@ from app.models import (
     HeartbeatRequest,
     ResetSessionRequest,
 )
+from app.parsers.archive import parse_archive_zip, peak_records_to_alert_events
 
 app = FastAPI(
     title="UABAMS Cloud API",
@@ -76,6 +77,14 @@ async def startup() -> None:
     await db.calibration_versions.create_index([("gateway_id", 1), ("version", -1)])
     await db.alert_events.create_index([("trainNo", 1), ("createdAt", -1)])
     await db.archives.create_index([("gatewayId", 1), ("receivedAt", -1)])
+    await db.archives.create_index([("gatewayId", 1), ("sha256", 1)])
+    await db.rms_records.create_index([("trainId", 1), ("gatewayId", 1), ("positionMm", 1)])
+    await db.rms_records.create_index([("archiveSha256", 1)])
+    await db.rms_records.create_index([("gpsValid", 1), ("latitude", 1), ("longitude", 1)])
+    await db.peak_records.create_index([("trainId", 1), ("gatewayId", 1), ("windowStartMm", 1)])
+    await db.peak_records.create_index([("archiveSha256", 1)])
+    await db.fault_records.create_index([("trainId", 1), ("gatewayId", 1), ("timestampMs", 1)])
+    await db.fault_records.create_index([("archiveSha256", 1)])
     await db.sessions.create_index([("trainNo", 1), ("status", 1)])
 
 
@@ -234,22 +243,102 @@ async def upload_archive(
     if expected_sha256 and expected_sha256.lower() != actual_sha256:
         raise HTTPException(status_code=400, detail="SHA-256 mismatch")
 
+    try:
+        parsed = parse_archive_zip(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     now = utc_now()
+    metadata = parsed.metadata or {}
+    session_name = (
+        metadata.get("sessionName")
+        or metadata.get("sessionId")
+        or request.headers.get("X-Session-Name")
+        or f"{gateway_id}-{int(now.timestamp())}"
+    )
+    session_status = metadata.get("sessionStatus", "unknown")
+    warnings = list(parsed.warnings)
+
+    if metadata.get("gatewayId") and metadata.get("gatewayId") != gateway_id:
+        warnings.append("Metadata gatewayId does not match X-Gateway-Id header")
+    if metadata.get("trainId") and metadata.get("trainId") != train_id:
+        warnings.append("Metadata trainId does not match X-Train-Id header")
+
+    common = {
+        "gatewayId": gateway_id,
+        "trainId": train_id,
+        "sessionName": session_name,
+        "archiveSha256": actual_sha256,
+        "createdAt": now,
+    }
+
+    await db.rms_records.delete_many({"archiveSha256": actual_sha256, "gatewayId": gateway_id})
+    await db.peak_records.delete_many({"archiveSha256": actual_sha256, "gatewayId": gateway_id})
+    await db.fault_records.delete_many({"archiveSha256": actual_sha256, "gatewayId": gateway_id})
+    await db.alert_events.delete_many({"archiveSha256": actual_sha256, "gatewayId": gateway_id, "source": "peak_50m.bin"})
+
+    rms_records = [{**record, **common} for record in parsed.rms_records]
+    peak_records = [{**record, **common} for record in parsed.peak_records]
+    fault_records = [{**record, **common} for record in parsed.fault_records]
+    peak_alerts = peak_records_to_alert_events(
+        parsed.peak_records,
+        gateway_id,
+        train_id,
+        session_name,
+        actual_sha256,
+        now,
+    )
+
+    if rms_records:
+        await db.rms_records.insert_many(rms_records)
+    if peak_records:
+        await db.peak_records.insert_many(peak_records)
+    if fault_records:
+        await db.fault_records.insert_many(fault_records)
+    if peak_alerts:
+        await db.alert_events.insert_many(peak_alerts)
+
     document = {
         "gatewayId": gateway_id,
         "trainId": train_id,
         "contentType": request.headers.get("content-type", "application/zip"),
         "sizeBytes": len(body),
         "sha256": actual_sha256,
+        "sessionName": session_name,
+        "sessionStatus": session_status,
+        "metadata": metadata,
+        "filesInZip": parsed.files,
+        "rawFiles": parsed.raw_file_manifest,
+        "rmsRecordCount": len(rms_records),
+        "peakRecordCount": len(peak_records),
+        "faultRecordCount": len(fault_records),
+        "peakAlertCount": len(peak_alerts),
+        "parseWarnings": warnings,
         "receivedAt": now,
-        "status": "received",
+        "status": "processed_with_warnings" if warnings else "processed",
     }
 
-    await db.archives.insert_one(document)
+    existing = await db.archives.find_one({"gatewayId": gateway_id, "sha256": actual_sha256})
+    if existing:
+        await db.archives.update_one({"_id": existing["_id"]}, {"$set": document})
+        document["_id"] = existing["_id"]
+    else:
+        result = await db.archives.insert_one(document)
+        document["_id"] = result.inserted_id
+
     await mark_gateway_online(gateway_id, train_id, now)
 
-    return {"status": "success", "sha256": actual_sha256, "sizeBytes": len(body)}
-
+    return {
+        "status": "success",
+        "sha256": actual_sha256,
+        "sizeBytes": len(body),
+        "sessionName": session_name,
+        "rmsRecords": len(rms_records),
+        "peakRecords": len(peak_records),
+        "faultRecords": len(fault_records),
+        "peakAlerts": len(peak_alerts),
+        "warnings": warnings,
+    }
 
 @app.post("/api/v1/alert")
 async def create_alert(
@@ -416,22 +505,48 @@ async def map_alerts(train_id: str):
 
 
 @app.get("/api/v1/map/rms")
-async def map_rms(train_id: str):
-    alerts = await db.alert_events.find({"trainNo": train_id, "sessionStatus": {"$ne": "archived"}}).sort("createdAt", -1).limit(200).to_list(length=200)
+async def map_rms(train_id: str, gateway_id: str | None = None):
+    query: dict[str, Any] = {
+        "trainId": train_id,
+        "gpsValid": True,
+        "latitude": {"$nin": [None, 0]},
+        "longitude": {"$nin": [None, 0]},
+    }
+    if gateway_id:
+        query["gatewayId"] = gateway_id
+
+    records = await db.rms_records.find(
+        query,
+        {
+            "trainId": 1,
+            "gatewayId": 1,
+            "sessionName": 1,
+            "latitude": 1,
+            "longitude": 1,
+            "color": 1,
+            "maxG": 1,
+            "positionMm": 1,
+            "masterCount": 1,
+            "createdAt": 1,
+        },
+    ).sort("positionMm", 1).limit(5000).to_list(length=5000)
+
     return [
         {
-            "train_id": item.get("trainNo"),
+            "train_id": item.get("trainId"),
             "gateway_id": item.get("gatewayId"),
+            "session": item.get("sessionName"),
             "lat": item.get("latitude"),
             "lon": item.get("longitude"),
-            "color": item.get("alert", "GREEN"),
-            "peak_g": item.get("peakValueG"),
-            "speed_kmph": item.get("speedKmph"),
+            "color": item.get("color", "GREEN"),
+            "peak_g": item.get("maxG", 0),
             "position_mm": item.get("positionMm"),
+            "master_count": item.get("masterCount"),
             "created_at": serialize(item.get("createdAt")),
         }
-        for item in alerts
+        for item in records
     ]
+
 @app.post("/api/v1/sessions/reset")
 async def reset_session(
     data: ResetSessionRequest,
@@ -502,13 +617,3 @@ async def mark_gateway_online(gateway_id: str, train_id: str, now: datetime) -> 
         },
         upsert=True,
     )
-
-
-
-
-
-
-
-
-
-

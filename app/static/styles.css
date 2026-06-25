@@ -412,3 +412,19 @@ code { font-family: Consolas, monospace; font-size: 13px; }
 @media (max-width: 760px) {
   .alert-summary-grid { grid-template-columns: 1fr; }
 }
+
+.gateway-kpis .alert-kpi.GREEN {
+  border-color: rgba(21, 148, 95, 0.45);
+  background: #ecfdf5;
+}
+.gateway-kpis .alert-kpi.GREEN strong { color: var(--green); }
+.gateway-kpis .alert-kpi.YELLOW {
+  border-color: rgba(183, 121, 31, 0.45);
+  background: #fffbeb;
+}
+.gateway-kpis .alert-kpi.YELLOW strong { color: var(--yellow); }
+.gateway-kpis .alert-kpi.RED {
+  border-color: rgba(194, 65, 52, 0.45);
+  background: #fef2f2;
+}
+.gateway-kpis .alert-kpi.RED strong { color: var(--red); }

@@ -1,9 +1,8 @@
-const state = { dashboard: null };
+const state = { dashboard: null, rmsPoints: [], mapAlerts: [] };
 const gatewayIds = ['GW_UABAMS_BOGIE_01', 'GW_UABAMS_BOGIE_02'];
 const gatewayLabels = { GW_UABAMS_BOGIE_01: 'GW1', GW_UABAMS_BOGIE_02: 'GW2' };
 const maps = {};
 const layers = {};
-const overlays = {};
 
 const $ = (id) => document.getElementById(id);
 
@@ -62,6 +61,10 @@ function alertColor(alertType) {
   return '#16a34a';
 }
 
+function normalizeAlert(value) {
+  return String(value || 'GREEN').toUpperCase();
+}
+
 function lastDataTime(train, gateways, alerts, archives) {
   return train.updatedAt || archives[0]?.receivedAt || gateways.find((gw) => gw.lastHeartbeat)?.lastHeartbeat || alerts[0]?.createdAt;
 }
@@ -83,12 +86,10 @@ function initializeMaps() {
     return;
   }
 
-  const config = [
+  [
     { gatewayId: 'GW_UABAMS_BOGIE_01', target: 'mapGw1' },
     { gatewayId: 'GW_UABAMS_BOGIE_02', target: 'mapGw2' },
-  ];
-
-  config.forEach(({ gatewayId, target }) => {
+  ].forEach(({ gatewayId, target }) => {
     maps[gatewayId] = L.map(target, { zoomControl: true }).setView([22.9734, 78.6569], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
@@ -98,11 +99,23 @@ function initializeMaps() {
   });
 }
 
-function jitteredPoint(alert, index) {
-  const lat = Number(alert.latitude);
-  const lon = Number(alert.longitude);
-  const offset = index * 0.0015;
-  return [lat + offset, lon + offset];
+function dashboardAlertToMapPoint(alert) {
+  return {
+    gateway_id: alert.gatewayId,
+    lat: alert.latitude,
+    lon: alert.longitude,
+    color: alert.alert,
+    peak_g: alert.peakValueG,
+    speed_kmph: alert.speedKmph,
+    position_mm: alert.positionMm,
+    created_at: alert.createdAt,
+    source: 'alert',
+  };
+}
+
+function jitterPoint(lat, lon, index) {
+  const offset = index * 0.0008;
+  return [Number(lat) + offset, Number(lon) + offset];
 }
 
 function markerPopup(alert, index) {
@@ -119,6 +132,20 @@ function markerPopup(alert, index) {
     </div>
   `;
 }
+
+function routePopup(point) {
+  const positionKm = Number.isFinite(Number(point.position_mm)) ? `${(Number(point.position_mm) / 1000).toFixed(2)} km` : '-';
+  return `
+    <div class="leaflet-popup-content-box">
+      <strong>${normalizeAlert(point.color)} - ${gatewayLabels[point.gateway_id] || point.gateway_id}</strong><br>
+      <span>Session:</span> ${point.session || '-'}<br>
+      <span>Peak:</span> ${point.peak_g ?? '-'} G<br>
+      <span>Position:</span> ${positionKm}<br>
+      <span>Location:</span> ${point.lat}, ${point.lon}
+    </div>
+  `;
+}
+
 function renderDashboard(data) {
   state.dashboard = data;
   const train = data.train || {};
@@ -126,25 +153,23 @@ function renderDashboard(data) {
   const alerts = data.lastAlerts || [];
   const archives = data.archives || [];
   const activeSession = data.activeSession;
+  const rmsPoints = data.rmsPoints || [];
+  const mapAlerts = data.mapAlerts || alerts.map(dashboardAlertToMapPoint);
   const onlineCount = gateways.filter((gw) => gw.online).length;
   const criticalCount = alerts.filter((alert) => alert.alert === 'RED').length;
-  const gw1Alert = latestAlertFor(alerts, 'GW_UABAMS_BOGIE_01');
-  const gw2Alert = latestAlertFor(alerts, 'GW_UABAMS_BOGIE_02');
-  const samePeak = gw1Alert && gw2Alert && gw1Alert.peakValueG === gw2Alert.peakValueG;
 
   $('heroTrain').textContent = train.trainNo || $('trainNo').value.trim();
   $('summaryTrain').textContent = train.trainNo || '-';
   $('summaryStatus').textContent = train.status || '-';
   $('summaryGateways').textContent = `${onlineCount}/${gateways.length || 2}`;
   $('summaryLastData').textContent = formatDate(lastDataTime(train, gateways, alerts, archives));
-  $('summaryCompare').textContent = samePeak ? `Common ${gw1Alert.peakValueG} G` : 'GW values differ';
   $('summaryArchives').textContent = archives.length;
   $('summaryCritical').textContent = criticalCount;
-  $('summaryPeak').textContent = alerts[0] ? `${alerts[0].peakValueG} G` : '-';
 
   $('gatewayList').innerHTML = gatewayIds.map((gatewayId) => {
     const gw = gateways.find((item) => item.gatewayId === gatewayId) || { gatewayId, trainId: train.trainNo, online: false };
     const latest = latestAlertFor(alerts, gatewayId);
+    const alertStatus = normalizeAlert(latest?.alert);
     const statusClass = gw.online ? 'online-box' : 'offline-box';
     return `
       <article class="gateway-card ${statusClass}">
@@ -155,7 +180,7 @@ function renderDashboard(data) {
         <div class="gateway-kpis">
           <div><span>Train</span><strong>${gw.trainId || train.trainNo || '-'}</strong></div>
           <div><span>Latest Peak</span><strong>${latest ? `${latest.peakValueG} G` : '-'}</strong></div>
-          <div><span>Alert</span><strong>${latest ? latest.alert : '-'}</strong></div>
+          <div class="alert-kpi ${latest ? alertStatus : ''}"><span>Alert</span><strong>${latest ? alertStatus : '-'}</strong></div>
           <div><span>Archives</span><strong>${archiveCountFor(archives, gatewayId)}</strong></div>
         </div>
         <div>Last heartbeat: ${formatDate(gw.lastHeartbeat)}</div>
@@ -166,7 +191,7 @@ function renderDashboard(data) {
 
   renderAlertSummary(alerts);
   renderAlerts(alerts);
-  renderMaps(alerts, gateways);
+  renderMaps(alerts, gateways, rmsPoints, mapAlerts);
   renderArchives(archives);
   renderSession(activeSession, train.trainNo);
 }
@@ -193,66 +218,95 @@ function renderAlerts(alerts) {
   `).join('') : '<tr><td colspan="5">No alerts found.</td></tr>';
 }
 
-function renderMaps(alerts, gateways) {
+function drawColoredRoute(layer, points) {
+  if (points.length < 2) return;
+  for (let i = 1; i < points.length; i += 1) {
+    const previous = points[i - 1];
+    const current = points[i];
+    L.polyline(
+      [[Number(previous.lat), Number(previous.lon)], [Number(current.lat), Number(current.lon)]],
+      {
+        color: alertColor(normalizeAlert(current.color)),
+        weight: normalizeAlert(current.color) === 'RED' ? 7 : 6,
+        opacity: 0.88,
+      }
+    ).addTo(layer);
+  }
+}
+
+function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
   gatewayIds.forEach((gatewayId) => {
     const map = maps[gatewayId];
     if (!map || !window.L) return;
     layers[gatewayId].clearLayers();
 
-    const gatewayAlerts = alerts
-      .filter((alert) => alert.gatewayId === gatewayId && Number.isFinite(Number(alert.latitude)) && Number.isFinite(Number(alert.longitude)))
+    const routePoints = rmsPoints
+      .filter((point) => point.gateway_id === gatewayId && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)));
+    const alertPoints = (mapAlerts.length ? mapAlerts : alerts.map(dashboardAlertToMapPoint))
+      .filter((point) => point.gateway_id === gatewayId && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)))
       .slice()
       .reverse();
+    const fallbackRoute = routePoints.length ? routePoints : alertPoints;
 
     const stateId = gatewayId === 'GW_UABAMS_BOGIE_02' ? 'gw2MapState' : 'gw1MapState';
     const gw = gateways.find((item) => item.gatewayId === gatewayId);
     $(stateId).textContent = gw?.online ? 'Online' : 'Offline';
     $(stateId).className = `badge ${gw?.online ? 'online' : 'offline'}`;
 
-    if (!gatewayAlerts.length) {
+    if (!fallbackRoute.length && !alertPoints.length) {
       map.setView([22.9734, 78.6569], 5);
       return;
     }
 
-    const points = gatewayAlerts.map((alert, index) => jitteredPoint(alert, index));
-    if (points.length > 1) {
-      L.polyline(points, {
-        color: '#111827',
-        weight: 4,
-        opacity: 0.75,
-        dashArray: '8 8',
-      }).addTo(layers[gatewayId]);
-    }
+    drawColoredRoute(layers[gatewayId], fallbackRoute);
 
-    gatewayAlerts.forEach((alert, index) => {
-      const point = points[index];
-      L.circleMarker(point, {
-        radius: alert.alert === 'RED' ? 9 : 7,
+    fallbackRoute.forEach((point) => {
+      L.circleMarker([Number(point.lat), Number(point.lon)], {
+        radius: normalizeAlert(point.color) === 'RED' ? 8 : 6,
         color: '#ffffff',
         weight: 2,
-        fillColor: alertColor(alert.alert),
-        fillOpacity: 0.95,
+        fillColor: alertColor(normalizeAlert(point.color)),
+        fillOpacity: 0.92,
       })
         .addTo(layers[gatewayId])
-        .bindPopup(markerPopup(alert, index));
+        .bindPopup(routePopup(point));
     });
 
-    const bounds = L.latLngBounds(points);
+    alertPoints.forEach((point, index) => {
+      const markerPoint = jitterPoint(point.lat, point.lon, index);
+      L.circleMarker(markerPoint, {
+        radius: normalizeAlert(point.color) === 'RED' ? 11 : 9,
+        color: '#111827',
+        weight: 2,
+        fillColor: alertColor(normalizeAlert(point.color)),
+        fillOpacity: 1,
+      })
+        .addTo(layers[gatewayId])
+        .bindPopup(routePopup(point));
+    });
+
+    const bounds = L.latLngBounds([
+      ...fallbackRoute.map((point) => [Number(point.lat), Number(point.lon)]),
+      ...alertPoints.map((point, index) => jitterPoint(point.lat, point.lon, index)),
+    ]);
     if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.35), { maxZoom: 13 });
+      map.fitBounds(bounds.pad(0.25), { maxZoom: 15 });
     }
   });
 }
+
 function renderArchives(archives) {
   $('archiveTable').innerHTML = archives.length ? archives.map((archive) => `
     <tr>
       <td>${formatDate(archive.receivedAt)}</td>
       <td>${archive.gatewayId || '-'}</td>
       <td>${bytes(archive.sizeBytes)}</td>
-      <td><code>${shortHash(archive.sha256)}</code></td>
+      <td>${archive.rmsRecordCount ?? 0}</td>
+      <td>${archive.peakRecordCount ?? 0}</td>
+      <td>${archive.faultRecordCount ?? 0}</td>
       <td>${archive.status || '-'}</td>
     </tr>
-  `).join('') : '<tr><td colspan="5">No archives uploaded.</td></tr>';
+  `).join('') : '<tr><td colspan="7">No archives uploaded.</td></tr>';
 }
 
 function renderSession(session, trainNo) {
@@ -385,6 +439,14 @@ async function loadDashboard() {
   setStatus('Loading');
   try {
     const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/dashboard`);
+    const [rmsPoints, mapAlerts] = await Promise.all([
+      requestJson(`/api/v1/map/rms?train_id=${encodeURIComponent(trainNo)}`).catch(() => []),
+      requestJson(`/api/v1/map/alerts?train_id=${encodeURIComponent(trainNo)}`).catch(() => []),
+    ]);
+    data.rmsPoints = rmsPoints;
+    data.mapAlerts = mapAlerts;
+    state.rmsPoints = rmsPoints;
+    state.mapAlerts = mapAlerts;
     renderDashboard(data);
     setStatus('Live', 'ok');
   } catch (error) {
@@ -430,7 +492,3 @@ function boot() {
 }
 
 boot();
-
-
-
-
