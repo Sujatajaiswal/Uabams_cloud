@@ -271,12 +271,11 @@ def _mg_value(value: int) -> dict[str, int | float | None]:
 
 
 def _color_for_g(value: float) -> str:
-    if value <= 10:
-        return "GREEN"
-    if value <= 30:
+    if value > 80:
+        return "RED"
+    if value > 50:
         return "YELLOW"
-    return "RED"
-
+    return "GREEN"
 
 def _max_peak_axis(axes: dict[str, dict[str, Any]]) -> tuple[str | None, dict[str, Any]]:
     valid_axes = [

@@ -95,7 +95,7 @@ async def root():
 
 @app.get("/dashboard")
 async def dashboard_page():
-    return FileResponse(Path("app/static/index.html"))
+    return FileResponse(Path("app/static/index.html"), headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/v1/handshake")
