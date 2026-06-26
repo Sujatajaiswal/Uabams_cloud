@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import struct
 import zipfile
 from dataclasses import dataclass, field
@@ -8,12 +9,15 @@ from io import BytesIO
 from typing import Any
 
 
-RMS_RECORD_SIZE = 66
-RMS_FORMAT = "<Qidd?BIIIIIIIII"
+RMS_GATEWAY_RECORD_SIZE = 70
+RMS_GATEWAY_FORMAT = "<Qifdd?B9f"
+RMS_LEGACY_RECORD_SIZE = 66
+RMS_LEGACY_FORMAT = "<Qidd?BIIIIIIIII"
 
 PEAK_RECORD_SIZE = 302
 PEAK_HEADER_FORMAT = "<iifB?"
-PEAK_AXIS_FORMAT = "<IiQdd"
+PEAK_AXIS_FORMAT_GATEWAY = "<fIQdd"
+PEAK_AXIS_FORMAT_LEGACY = "<IiQdd"
 PEAK_AXIS_SIZE = 32
 
 FAULT_RECORD_SIZE = 75
@@ -80,20 +84,52 @@ def parse_archive_zip(body: bytes) -> ParsedArchive:
 
 
 def parse_rms_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dict[str, Any]]:
-    _warn_on_remainder("rms/rms_25cm.bin", raw, RMS_RECORD_SIZE, warnings)
     records: list[dict[str, Any]] = []
-    usable = len(raw) - (len(raw) % RMS_RECORD_SIZE)
 
-    for offset in range(0, usable, RMS_RECORD_SIZE):
-        chunk = raw[offset : offset + RMS_RECORD_SIZE]
-        unpacked = struct.unpack(RMS_FORMAT, chunk)
+    if len(raw) % RMS_GATEWAY_RECORD_SIZE == 0:
+        record_size = RMS_GATEWAY_RECORD_SIZE
+        usable = len(raw)
+        for offset in range(0, usable, record_size):
+            chunk = raw[offset : offset + record_size]
+            unpacked = struct.unpack(RMS_GATEWAY_FORMAT, chunk)
+            master_count, position_mm, speed_kmph, latitude, longitude, gps_valid, valid_mask, *axis_g = unpacked
+            axis_values = {name: _g_value(value) for name, value in zip(AXIS_NAMES, axis_g)}
+            valid_axis_g = [item["g"] for item in axis_values.values() if item["g"] is not None]
+            max_g = max(valid_axis_g, default=0.0)
+
+            record: dict[str, Any] = {
+                "recordIndex": offset // record_size,
+                "masterCount": master_count,
+                "positionMm": position_mm,
+                "speedKmph": round(speed_kmph, 2),
+                "latitude": latitude,
+                "longitude": longitude,
+                "gpsValid": gps_valid,
+                "validMask": valid_mask,
+                "maxG": round(max_g, 4),
+                "maxMg": int(round(max_g * 1000)),
+                "color": _color_for_g(max_g),
+                "recordFormat": "gateway_70_byte_float_g",
+            }
+            for axis_name, value in axis_values.items():
+                record[f"{axis_name}_mg"] = value["mg"]
+                record[f"{axis_name}_g"] = value["g"]
+            records.append(record)
+        return records
+
+    _warn_on_remainder("rms/rms_25cm.bin", raw, RMS_LEGACY_RECORD_SIZE, warnings)
+    usable = len(raw) - (len(raw) % RMS_LEGACY_RECORD_SIZE)
+
+    for offset in range(0, usable, RMS_LEGACY_RECORD_SIZE):
+        chunk = raw[offset : offset + RMS_LEGACY_RECORD_SIZE]
+        unpacked = struct.unpack(RMS_LEGACY_FORMAT, chunk)
         master_count, position_mm, latitude, longitude, gps_valid, valid_mask, *axis_mg = unpacked
         axis_values = {name: _mg_value(value) for name, value in zip(AXIS_NAMES, axis_mg)}
         valid_axis_g = [item["g"] for item in axis_values.values() if item["g"] is not None]
         max_g = max(valid_axis_g, default=0.0)
 
-        record: dict[str, Any] = {
-            "recordIndex": offset // RMS_RECORD_SIZE,
+        record = {
+            "recordIndex": offset // RMS_LEGACY_RECORD_SIZE,
             "masterCount": master_count,
             "positionMm": position_mm,
             "latitude": latitude,
@@ -103,6 +139,7 @@ def parse_rms_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dict[
             "maxG": round(max_g, 4),
             "maxMg": int(round(max_g * 1000)),
             "color": _color_for_g(max_g),
+            "recordFormat": "legacy_66_byte_uint_mg",
         }
         for axis_name, value in axis_values.items():
             record[f"{axis_name}_mg"] = value["mg"]
@@ -110,7 +147,6 @@ def parse_rms_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dict[
         records.append(record)
 
     return records
-
 
 def parse_peak_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dict[str, Any]]:
     _warn_on_remainder("peak/peak_50m.bin", raw, PEAK_RECORD_SIZE, warnings)
@@ -126,18 +162,7 @@ def parse_peak_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dict
 
         for index, axis_name in enumerate(AXIS_NAMES):
             base = 14 + index * PEAK_AXIS_SIZE
-            peak_mg, peak_position, peak_master_count, peak_lat, peak_lon = struct.unpack_from(
-                PEAK_AXIS_FORMAT, chunk, base
-            )
-            value = _mg_value(peak_mg)
-            axes[axis_name] = {
-                "peakValueMg": value["mg"],
-                "peakValueG": value["g"],
-                "peakPositionMm": peak_position,
-                "peakMasterCount": peak_master_count,
-                "peakLat": peak_lat,
-                "peakLon": peak_lon,
-            }
+            axes[axis_name] = _parse_peak_axis(chunk, base)
 
         max_axis, max_axis_data = _max_peak_axis(axes)
         max_g = max_axis_data.get("peakValueG") or 0.0
@@ -163,6 +188,38 @@ def parse_peak_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dict
 
     return records
 
+
+def _parse_peak_axis(chunk: bytes, base: int) -> dict[str, Any]:
+    peak_mg, peak_position, peak_master_count, peak_lat, peak_lon = struct.unpack_from(
+        PEAK_AXIS_FORMAT_LEGACY, chunk, base
+    )
+    legacy_value = _mg_value(peak_mg)
+    legacy_g = legacy_value["g"]
+    if legacy_g is not None and 0 <= legacy_g <= 1000:
+        return {
+            "peakValueMg": legacy_value["mg"],
+            "peakValueG": legacy_value["g"],
+            "peakPositionMm": peak_position,
+            "peakMasterCount": peak_master_count,
+            "peakLat": peak_lat,
+            "peakLon": peak_lon,
+            "recordFormat": "legacy_uint_mg",
+        }
+
+    peak_g, peak_position, peak_master_count, peak_lat, peak_lon = struct.unpack_from(
+        PEAK_AXIS_FORMAT_GATEWAY, chunk, base
+    )
+    if not math.isfinite(peak_g):
+        peak_g = 0.0
+    return {
+        "peakValueMg": int(round(peak_g * 1000)),
+        "peakValueG": round(peak_g, 4),
+        "peakPositionMm": peak_position,
+        "peakMasterCount": peak_master_count,
+        "peakLat": peak_lat,
+        "peakLon": peak_lon,
+        "recordFormat": "gateway_float_g",
+    }
 
 def parse_fault_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dict[str, Any]]:
     _warn_on_remainder("faults/faults.bin", raw, FAULT_RECORD_SIZE, warnings)
@@ -269,6 +326,12 @@ def _mg_value(value: int) -> dict[str, int | float | None]:
         return {"mg": None, "g": None}
     return {"mg": value, "g": round(value / 1000.0, 4)}
 
+
+def _g_value(value: float) -> dict[str, int | float | None]:
+    if not math.isfinite(value):
+        return {"mg": None, "g": None}
+    rounded_g = round(value, 4)
+    return {"mg": int(round(rounded_g * 1000)), "g": rounded_g}
 
 def _color_for_g(value: float) -> str:
     if value > 80:
