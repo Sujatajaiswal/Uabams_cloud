@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UABAMS Dashboard</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/static/styles.css?v=20260626-gateway-detail">
+  <link rel="stylesheet" href="/static/styles.css?v=20260626-gateway-filter">
 </head>
 <body>
   <header class="app-header">
@@ -20,24 +20,17 @@
   </header>
 
   <main class="layout">
-    <section class="toolbar" aria-label="Train search and credentials">
+    <section class="toolbar gateway-toolbar" aria-label="Gateway selector">
+      <input id="trainNo" type="hidden" value="019456">
       <label>
-        Train No
-        <input id="trainNo" value="019456" autocomplete="off">
+        Gateway
+        <select id="dashboardGateway">
+          <option value="">All Gateways</option>
+          <option value="GW_UABAMS_BOGIE_01">GW1 - GW_UABAMS_BOGIE_01</option>
+          <option value="GW_UABAMS_BOGIE_02">GW2 - GW_UABAMS_BOGIE_02</option>
+        </select>
       </label>
-      <label>
-        GW1 API Key
-        <input id="apiKeyGw1" type="password" autocomplete="off" placeholder="GW1 key">
-      </label>
-      <label>
-        GW2 API Key
-        <input id="apiKeyGw2" type="password" autocomplete="off" placeholder="GW2 key">
-      </label>
-      <label>
-        Admin Key
-        <input id="adminKey" type="password" autocomplete="off" placeholder="Reset key">
-      </label>
-      <button id="searchBtn" class="primary">Update</button>
+      <button id="searchBtn" class="primary">Load Details</button>
     </section>
 
     <section class="train-band">
@@ -50,14 +43,13 @@
         <strong>Vande Bharat</strong>
       </div>
       <div>
-        <span>Gateway Pair</span>
-        <strong>GW1 + GW2</strong>
+        <span>Gateway View</span>
+        <strong id="heroGateway">All Gateways</strong>
       </div>
     </section>
 
     <nav class="tabs" aria-label="Dashboard sections">
       <button class="tab active" data-tab="overview">Dashboard</button>
-      <button class="tab" data-tab="gatewayDetail">Gateway Details</button>
       <button class="tab" data-tab="calibration">Calibration</button>
       <button class="tab" data-tab="alerts">Alerts</button>
       <button class="tab" data-tab="archives">Archives</button>
@@ -75,44 +67,34 @@
       </div>
       <div class="section-head"><h2>Gateway Status</h2></div>
       <div id="gatewayList" class="gateway-grid two-col"></div>
-    </section>
 
-
-    <section id="gatewayDetail" class="panel">
-      <div class="section-head">
-        <h2>Selected Gateway Details</h2>
-        <div class="inline-controls">
-          <select id="detailGateway">
-            <option value="GW_UABAMS_BOGIE_01">GW1 - GW_UABAMS_BOGIE_01</option>
-            <option value="GW_UABAMS_BOGIE_02">GW2 - GW_UABAMS_BOGIE_02</option>
-          </select>
-          <button id="loadGatewayDetailBtn">Load Details</button>
+      <section id="dashboardGatewayDetails" class="gateway-detail-section hidden">
+        <div class="section-head"><h2>Selected Gateway Details</h2></div>
+        <div class="summary-grid detail-grid">
+          <div class="metric"><span>Gateway</span><strong id="detailGatewayId">-</strong></div>
+          <div class="metric"><span>Status</span><strong id="detailStatus">-</strong></div>
+          <div class="metric"><span>Last Heartbeat</span><strong id="detailHeartbeat">-</strong></div>
+          <div class="metric"><span>Latest Alert</span><strong id="detailAlert">-</strong></div>
+          <div class="metric"><span>RMS Records</span><strong id="detailRms">-</strong></div>
+          <div class="metric"><span>Peak Records</span><strong id="detailPeak">-</strong></div>
+          <div class="metric"><span>Fault Records</span><strong id="detailFaults">-</strong></div>
+          <div class="metric"><span>Archives</span><strong id="detailArchives">-</strong></div>
         </div>
-      </div>
-      <div class="summary-grid detail-grid">
-        <div class="metric"><span>Gateway</span><strong id="detailGatewayId">-</strong></div>
-        <div class="metric"><span>Status</span><strong id="detailStatus">-</strong></div>
-        <div class="metric"><span>Last Heartbeat</span><strong id="detailHeartbeat">-</strong></div>
-        <div class="metric"><span>Latest Alert</span><strong id="detailAlert">-</strong></div>
-        <div class="metric"><span>RMS Records</span><strong id="detailRms">-</strong></div>
-        <div class="metric"><span>Peak Records</span><strong id="detailPeak">-</strong></div>
-        <div class="metric"><span>Fault Records</span><strong id="detailFaults">-</strong></div>
-        <div class="metric"><span>Archives</span><strong id="detailArchives">-</strong></div>
-      </div>
-      <div class="section-head"><h2>Recent Alerts For Selected Gateway</h2></div>
-      <div class="table-wrap compact-table">
-        <table>
-          <thead><tr><th>Time</th><th>Peak G</th><th>Alert</th><th>Location</th></tr></thead>
-          <tbody id="detailAlertsTable"></tbody>
-        </table>
-      </div>
-      <div class="section-head"><h2>Recent Archives For Selected Gateway</h2></div>
-      <div class="table-wrap compact-table">
-        <table>
-          <thead><tr><th>Received</th><th>Size</th><th>RMS</th><th>Peak</th><th>Faults</th><th>Status</th></tr></thead>
-          <tbody id="detailArchivesTable"></tbody>
-        </table>
-      </div>
+        <div class="section-head"><h2>Recent Alerts For Selected Gateway</h2></div>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead><tr><th>Time</th><th>Peak G</th><th>Alert</th><th>Location</th></tr></thead>
+            <tbody id="detailAlertsTable"></tbody>
+          </table>
+        </div>
+        <div class="section-head"><h2>Recent Archives For Selected Gateway</h2></div>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead><tr><th>Received</th><th>Size</th><th>RMS</th><th>Peak</th><th>Faults</th><th>Status</th></tr></thead>
+            <tbody id="detailArchivesTable"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <section id="calibration" class="panel">
@@ -135,19 +117,19 @@
         <div class="alert-summary green"><span>Green Alerts</span><strong id="alertGreen">0</strong></div>
       </div>
       <div class="map-pair">
-        <article class="map-card">
+        <article class="map-card" data-map-gateway="GW_UABAMS_BOGIE_01">
           <div class="gateway-title"><span>GW1 Route Map</span><span id="gw1MapState" class="badge offline">-</span></div>
           <div class="route-map leaflet-map" id="mapGw1"></div>
         </article>
-        <article class="map-card">
+        <article class="map-card" data-map-gateway="GW_UABAMS_BOGIE_02">
           <div class="gateway-title"><span>GW2 Route Map</span><span id="gw2MapState" class="badge offline">-</span></div>
           <div class="route-map leaflet-map" id="mapGw2"></div>
         </article>
       </div>
       <div class="map-legend">
-        <span class="dot GREEN"></span> Normal
-        <span class="dot YELLOW"></span> Warning
-        <span class="dot RED"></span> Critical
+        <span class="dot GREEN"></span> Normal route
+        <span class="dot YELLOW"></span> Warning route
+        <span class="dot RED"></span> Critical route / red alert marker
       </div>
       <div class="section-head"><h2>Alert Events</h2></div>
       <div class="table-wrap compact-table">
@@ -178,7 +160,10 @@
           <h2>Reset Session</h2>
           <p id="sessionText">No active session loaded.</p>
         </div>
-        <button id="resetBtn" class="danger">Reset Train Session</button>
+        <div class="reset-actions">
+          <label>Admin Key<input id="adminKey" type="password" autocomplete="off" placeholder="Reset key"></label>
+          <button id="resetBtn" class="danger">Reset Train Session</button>
+        </div>
       </div>
       <div class="section-head"><h2>Targeted Data Cleanup</h2></div>
       <div class="reset-form">
@@ -202,6 +187,6 @@
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=20260626-gateway-detail"></script>
+  <script src="/static/app.js?v=20260626-gateway-filter"></script>
 </body>
 </html>

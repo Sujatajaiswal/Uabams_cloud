@@ -458,3 +458,24 @@ code { font-family: Consolas, monospace; font-size: 13px; }
   .inline-controls { align-items: stretch; flex-direction: column; }
   .inline-controls select, .inline-controls button { width: 100%; }
 }
+
+.hidden { display: none !important; }
+.gateway-toolbar {
+  grid-template-columns: minmax(260px, 360px) 136px;
+  justify-content: start;
+  align-items: end;
+}
+.gateway-toolbar select { min-width: 100%; }
+.gateway-detail-section { margin-top: 18px; }
+.reset-actions {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) auto;
+  gap: 12px;
+  align-items: end;
+}
+.map-pair:has(.map-card.hidden) {
+  grid-template-columns: minmax(320px, 1fr);
+}
+@media (max-width: 760px) {
+  .gateway-toolbar, .reset-actions { grid-template-columns: 1fr; }
+}

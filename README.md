@@ -40,7 +40,7 @@ X-Admin-Key
 ## Frontend Screens
 
 - Dashboard with separate GW1/GW2 status boxes
-- Gateway Details screen to select one gateway and view only that gateway data
+- Dashboard gateway selector to view all gateways or one selected gateway
 - Online gateway boxes show green, offline boxes show red
 - Calibration split into GW1 and GW2 panels
 - Calibration save is blocked until "Destination reached" is selected

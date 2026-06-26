@@ -9,7 +9,6 @@ from starlette.responses import JSONResponse, Response
 PROTECTED_GATEWAY_PATHS = (
     "/api/v1/archive",
     "/api/v1/alert",
-    "/api/v1/calibration",
 )
 
 

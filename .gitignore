@@ -7,3 +7,4 @@ app/middleware/__pycache__/
 venv/
 archive-smoke-test.bin
 sample_archives/
+tmp_reader_extract/

@@ -407,10 +407,7 @@ async def create_alert(
 async def get_calibration(
     gateway_id: str,
     request: Request,
-    x_api_key: Annotated[str, Header(alias="X-Api-Key")],
 ):
-    if gateway_id != request.state.gateway_id:
-        raise HTTPException(status_code=403, detail="API key does not belong to calibration gateway")
 
     calibration = await db.calibration_versions.find_one(
         {"gateway_id": gateway_id},
@@ -441,10 +438,7 @@ async def save_calibration(
     gateway_id: str,
     data: CalibrationUpdateRequest,
     request: Request,
-    x_api_key: Annotated[str, Header(alias="X-Api-Key")],
 ):
-    if gateway_id != request.state.gateway_id:
-        raise HTTPException(status_code=403, detail="API key does not belong to calibration gateway")
 
     gateway = await db.gateways.find_one({"gatewayId": gateway_id})
     if not gateway:

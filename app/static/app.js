@@ -1,4 +1,4 @@
-const state = { dashboard: null, rmsPoints: [], mapAlerts: [] };
+const state = { dashboard: null, rmsPoints: [], mapAlerts: [], selectedGateway: '' };
 const gatewayIds = ['GW_UABAMS_BOGIE_01', 'GW_UABAMS_BOGIE_02'];
 const gatewayLabels = { GW_UABAMS_BOGIE_01: 'GW1', GW_UABAMS_BOGIE_02: 'GW2' };
 const maps = {};
@@ -26,18 +26,21 @@ function setStatus(text, mode = '') {
   setClass('apiStatus', `status-pill ${mode}`.trim());
 }
 
-function apiKeyFor(gatewayId) {
-  return gatewayId === 'GW_UABAMS_BOGIE_02' ? $('apiKeyGw2')?.value.trim() : $('apiKeyGw1')?.value.trim();
+function selectedGatewayValue() {
+  return $('dashboardGateway')?.value || '';
+}
+
+function visibleGatewayIds() {
+  const selected = selectedGatewayValue();
+  return selected ? [selected] : gatewayIds;
 }
 
 function trainNoValue() {
   return $('trainNo')?.value.trim() || '019456';
 }
 
-function gatewayHeaders(gatewayId) {
-  return {
-    'X-Api-Key': apiKeyFor(gatewayId) || '',
-  };
+function gatewayHeaders() {
+  return {};
 }
 
 async function requestJson(url, options = {}) {
@@ -144,8 +147,24 @@ function routePopup(point) {
   `;
 }
 
+function gatewayMatches(item, gatewayId) {
+  return !gatewayId || item.gatewayId === gatewayId || item.gateway_id === gatewayId;
+}
+
+function setGatewayDetailVisible(visible) {
+  const section = $('dashboardGatewayDetails');
+  if (section) section.classList.toggle('hidden', !visible);
+}
+
+function syncCleanupGateway() {
+  const selected = selectedGatewayValue();
+  const cleanup = $('cleanupGateway');
+  if (cleanup) cleanup.value = selected;
+}
 function renderDashboard(data) {
   state.dashboard = data;
+  const selectedGateway = selectedGatewayValue();
+  state.selectedGateway = selectedGateway;
   const train = data.train || {};
   const gateways = data.gateways || [];
   const alerts = data.lastAlerts || [];
@@ -153,18 +172,25 @@ function renderDashboard(data) {
   const activeSession = data.activeSession;
   const rmsPoints = data.rmsPoints || [];
   const mapAlerts = data.mapAlerts || alerts.map(dashboardAlertToMapPoint);
-  const onlineCount = gateways.filter((gw) => gw.online).length;
-  const criticalCount = alerts.filter((alert) => alert.alert === 'RED').length;
+  const viewGatewayIds = visibleGatewayIds();
+  const viewGateways = gateways.filter((gw) => viewGatewayIds.includes(gw.gatewayId));
+  const viewAlerts = alerts.filter((alert) => gatewayMatches(alert, selectedGateway));
+  const viewArchives = archives.filter((archive) => gatewayMatches(archive, selectedGateway));
+  const viewRmsPoints = rmsPoints.filter((point) => gatewayMatches(point, selectedGateway));
+  const viewMapAlerts = mapAlerts.filter((point) => gatewayMatches(point, selectedGateway));
+  const onlineCount = viewGatewayIds.filter((gatewayId) => gateways.find((gw) => gw.gatewayId === gatewayId)?.online).length;
+  const criticalCount = viewAlerts.filter((alert) => alert.alert === 'RED').length;
 
   setText('heroTrain', train.trainNo || trainNoValue());
+  setText('heroGateway', selectedGateway ? `${gatewayLabels[selectedGateway]} - ${selectedGateway}` : 'All Gateways');
   setText('summaryTrain', train.trainNo || '-');
   setText('summaryStatus', train.status || '-');
-  setText('summaryGateways', `${onlineCount}/${gateways.length || 2}`);
-  setText('summaryLastData', formatDate(lastDataTime(train, gateways, alerts, archives)));
-  setText('summaryArchives', archives.length);
+  setText('summaryGateways', `${onlineCount}/${viewGatewayIds.length || 2}`);
+  setText('summaryLastData', formatDate(lastDataTime(train, viewGateways, viewAlerts, viewArchives)));
+  setText('summaryArchives', viewArchives.length);
   setText('summaryCritical', criticalCount);
 
-  setHtml('gatewayList', gatewayIds.map((gatewayId) => {
+  setHtml('gatewayList', viewGatewayIds.map((gatewayId) => {
     const gw = gateways.find((item) => item.gatewayId === gatewayId) || { gatewayId, trainId: train.trainNo, online: false };
     const latest = latestAlertFor(alerts, gatewayId);
     const alertStatus = normalizeAlert(latest?.alert);
@@ -187,13 +213,15 @@ function renderDashboard(data) {
     `;
   }).join(''));
 
-  renderAlertSummary(alerts);
-  renderAlerts(alerts);
-  renderArchives(archives);
+  setGatewayDetailVisible(Boolean(selectedGateway));
+  if (selectedGateway) loadGatewayDetails();
+  syncCleanupGateway();
+  renderAlertSummary(viewAlerts);
+  renderAlerts(viewAlerts);
+  renderArchives(viewArchives);
   renderSession(activeSession, train.trainNo);
-  renderMaps(alerts, gateways, rmsPoints, mapAlerts);
+  renderMaps(viewAlerts, gateways, viewRmsPoints, viewMapAlerts);
 }
-
 function renderAlertSummary(alerts) {
   const red = alerts.filter((alert) => alert.alert === 'RED').length;
   const yellow = alerts.filter((alert) => alert.alert === 'YELLOW').length;
@@ -260,19 +288,26 @@ function drawColoredRoute(layer, points) {
 }
 
 function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
+  const selectedGateway = selectedGatewayValue();
+  const visibleIds = visibleGatewayIds();
   const validRmsPoints = rmsPoints
     .filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)));
 
   gatewayIds.forEach((gatewayId) => {
+    const card = document.querySelector(`[data-map-gateway="${gatewayId}"]`);
+    if (card) card.classList.toggle('hidden', !visibleIds.includes(gatewayId));
+
     const map = maps[gatewayId];
     const layer = layers[gatewayId];
     if (!map || !layer || !window.L) return;
     layer.clearLayers();
+    if (!visibleIds.includes(gatewayId)) return;
 
-    const ownRoute = validRmsPoints.filter((point) => point.gateway_id === gatewayId);
-    const routePoints = ownRoute.length ? ownRoute : validRmsPoints;
+    const routePoints = validRmsPoints.filter((point) => point.gateway_id === gatewayId);
     const rawAlertPoints = (mapAlerts.length ? mapAlerts : alerts.map(dashboardAlertToMapPoint))
-      .filter((point) => point.gateway_id === gatewayId && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)))
+      .filter((point) => point.gateway_id === gatewayId)
+      .filter((point) => normalizeAlert(point.color) === 'RED')
+      .filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)))
       .slice()
       .reverse();
     const alertPoints = routePoints.length > 1
@@ -291,14 +326,13 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
 
     drawColoredRoute(layer, routePoints);
 
-
     alertPoints.forEach((point, index) => {
       const markerPoint = jitterPoint(point.lat, point.lon, index);
       L.circleMarker(markerPoint, {
-        radius: normalizeAlert(point.color) === 'RED' ? 13 : 11,
+        radius: 13,
         color: '#111827',
         weight: 2,
-        fillColor: alertColor(normalizeAlert(point.color)),
+        fillColor: alertColor('RED'),
         fillOpacity: 1,
       })
         .addTo(layer)
@@ -310,11 +344,10 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
       ...alertPoints.map((point, index) => jitterPoint(point.lat, point.lon, index)),
     ]);
     if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.2), { maxZoom: 16 });
+      map.fitBounds(bounds.pad(selectedGateway ? 0.3 : 0.2), { maxZoom: 16 });
     }
   });
 }
-
 function renderArchives(archives) {
   setHtml('archiveTable', archives.length ? archives.map((archive) => `
     <tr>
@@ -365,7 +398,8 @@ function renderGatewayDetails(data) {
 
 async function loadGatewayDetails() {
   const trainNo = trainNoValue();
-  const gatewayId = $('detailGateway')?.value || gatewayIds[0];
+  const gatewayId = selectedGatewayValue();
+  if (!gatewayId) { setGatewayDetailVisible(false); return; }
   try {
     setStatus('Loading');
     const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/gateways/${encodeURIComponent(gatewayId)}/details`);
@@ -594,18 +628,16 @@ function selectTab(tabId) {
   if (tabId === 'alerts') {
     setTimeout(() => gatewayIds.forEach((gatewayId) => maps[gatewayId]?.invalidateSize()), 120);
   }
-  if (tabId === 'gatewayDetail') loadGatewayDetails();
 }
 
 function boot() {
   initializeMaps();
   buildCalibrationCards();
   $('searchBtn')?.addEventListener('click', loadDashboard);
+  $('dashboardGateway')?.addEventListener('change', loadDashboard);
   $('loadAllCalibrationBtn')?.addEventListener('click', loadAllCalibration);
   $('resetBtn')?.addEventListener('click', resetSession);
   $('cleanupBtn')?.addEventListener('click', cleanupData);
-  $('loadGatewayDetailBtn')?.addEventListener('click', loadGatewayDetails);
-  $('detailGateway')?.addEventListener('change', loadGatewayDetails);
   document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tab)));
   loadDashboard();
 }
