@@ -180,9 +180,6 @@ function renderDashboard(data) {
   const viewMapAlerts = mapAlerts.filter((point) => gatewayMatches(point, selectedGateway));
   const onlineCount = viewGatewayIds.filter((gatewayId) => gateways.find((gw) => gw.gatewayId === gatewayId)?.online).length;
   const criticalCount = viewAlerts.filter((alert) => alert.alert === 'RED').length;
-
-  setText('heroTrain', train.trainNo || trainNoValue());
-  setText('heroGateway', selectedGateway ? `${gatewayLabels[selectedGateway]} - ${selectedGateway}` : 'All Gateways');
   setText('summaryTrain', train.trainNo || '-');
   setText('summaryStatus', train.status || '-');
   setText('summaryGateways', `${onlineCount}/${viewGatewayIds.length || 2}`);
