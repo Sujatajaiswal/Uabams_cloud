@@ -36,8 +36,6 @@ function trainNoValue() {
 
 function gatewayHeaders(gatewayId) {
   return {
-    'X-Gateway-Id': gatewayId,
-    'X-Train-Id': trainNoValue(),
     'X-Api-Key': apiKeyFor(gatewayId) || '',
   };
 }
@@ -331,6 +329,92 @@ function renderArchives(archives) {
   `).join('') : '<tr><td colspan="7">No archives uploaded.</td></tr>');
 }
 
+function renderGatewayDetails(data) {
+  const status = data.status || {};
+  const summary = data.summary || {};
+  const location = summary.latestLocation || {};
+  setText('detailGatewayId', data.gatewayId || '-');
+  setText('detailStatus', status.online ? 'Online' : 'Offline');
+  setText('detailHeartbeat', formatDate(status.lastHeartbeat));
+  setText('detailAlert', summary.latestAlert ? `${summary.latestAlert}${summary.latestPeakG ? ` (${summary.latestPeakG} G)` : ''}` : '-');
+  setText('detailRms', summary.rmsRecords ?? '-');
+  setText('detailPeak', summary.peakRecords ?? '-');
+  setText('detailFaults', summary.faultRecords ?? '-');
+  setText('detailArchives', summary.archives ?? '-');
+
+  setHtml('detailAlertsTable', data.alerts?.length ? data.alerts.map((alert) => `
+    <tr>
+      <td>${formatDate(alert.createdAt)}</td>
+      <td>${alert.peakValueG ?? '-'}</td>
+      <td><span class="badge ${alert.alert}">${alert.alert || '-'}</span></td>
+      <td>${alert.latitude ?? '-'}, ${alert.longitude ?? '-'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="4">No alerts for selected gateway.</td></tr>');
+
+  setHtml('detailArchivesTable', data.archives?.length ? data.archives.map((archive) => `
+    <tr>
+      <td>${formatDate(archive.receivedAt)}</td>
+      <td>${bytes(archive.sizeBytes)}</td>
+      <td>${archive.rmsRecordCount ?? 0}</td>
+      <td>${archive.peakRecordCount ?? 0}</td>
+      <td>${archive.faultRecordCount ?? 0}</td>
+      <td>${archive.status || '-'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6">No archives for selected gateway.</td></tr>');
+}
+
+async function loadGatewayDetails() {
+  const trainNo = trainNoValue();
+  const gatewayId = $('detailGateway')?.value || gatewayIds[0];
+  try {
+    setStatus('Loading');
+    const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/gateways/${encodeURIComponent(gatewayId)}/details`);
+    renderGatewayDetails(data);
+    setStatus('Live', 'ok');
+  } catch (error) {
+    setStatus('Error', 'error');
+    setHtml('detailAlertsTable', `<tr><td colspan="4" class="error-text">${error.message}</td></tr>`);
+  }
+}
+
+function localDateTimeToIso(value) {
+  return value ? new Date(value).toISOString() : null;
+}
+
+async function cleanupData() {
+  const trainNo = trainNoValue();
+  const latitudeText = $('cleanupLat')?.value.trim();
+  const longitudeText = $('cleanupLon')?.value.trim();
+  const payload = {
+    trainNo,
+    gatewayId: $('cleanupGateway')?.value || null,
+    startTime: localDateTimeToIso($('cleanupStart')?.value),
+    endTime: localDateTimeToIso($('cleanupEnd')?.value),
+    latitude: latitudeText ? Number(latitudeText) : null,
+    longitude: longitudeText ? Number(longitudeText) : null,
+    radiusMeters: Number($('cleanupRadius')?.value || 100),
+    reason: $('cleanupReason')?.value.trim() || null,
+  };
+  if (!payload.startTime && !payload.endTime && (payload.latitude === null || payload.longitude === null)) {
+    setText('resetOutput', 'Provide a time range or latitude/longitude before deleting data.');
+    return;
+  }
+  if (!confirm(`Delete matching data for train ${trainNo}?`)) return;
+  try {
+    const data = await requestJson('/api/v1/data/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': $('adminKey')?.value.trim() || '' },
+      body: JSON.stringify(payload),
+    });
+    setText('resetOutput', JSON.stringify(data, null, 2));
+    setStatus('Cleaned', 'ok');
+    await loadDashboard();
+    await loadGatewayDetails();
+  } catch (error) {
+    setStatus('Error', 'error');
+    setText('resetOutput', error.message);
+  }
+}
 function renderSession(session, trainNo) {
   setText('sessionText', session
     ? `Active session ${session.sessionId} for train ${trainNo}.`
@@ -510,6 +594,7 @@ function selectTab(tabId) {
   if (tabId === 'alerts') {
     setTimeout(() => gatewayIds.forEach((gatewayId) => maps[gatewayId]?.invalidateSize()), 120);
   }
+  if (tabId === 'gatewayDetail') loadGatewayDetails();
 }
 
 function boot() {
@@ -518,6 +603,9 @@ function boot() {
   $('searchBtn')?.addEventListener('click', loadDashboard);
   $('loadAllCalibrationBtn')?.addEventListener('click', loadAllCalibration);
   $('resetBtn')?.addEventListener('click', resetSession);
+  $('cleanupBtn')?.addEventListener('click', cleanupData);
+  $('loadGatewayDetailBtn')?.addEventListener('click', loadGatewayDetails);
+  $('detailGateway')?.addEventListener('change', loadGatewayDetails);
   document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tab)));
   loadDashboard();
 }

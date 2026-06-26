@@ -19,6 +19,7 @@ from app.models import (
     HandshakeRequest,
     HeartbeatRequest,
     ResetSessionRequest,
+    TargetedResetRequest,
 )
 from app.parsers.archive import parse_archive_zip, peak_records_to_alert_events
 
@@ -86,6 +87,7 @@ async def startup() -> None:
     await db.fault_records.create_index([("trainId", 1), ("gatewayId", 1), ("timestampMs", 1)])
     await db.fault_records.create_index([("archiveSha256", 1)])
     await db.sessions.create_index([("trainNo", 1), ("status", 1)])
+    await db.reset_events.create_index([("trainNo", 1), ("createdAt", -1)])
 
 
 @app.get("/")
@@ -225,17 +227,37 @@ async def heartbeat(data: HeartbeatRequest):
     return {"status": "success", "message": "Heartbeat updated", "lastHeartbeat": now}
 
 
+
+async def resolve_train_id(gateway_id: str, *candidates: str | None) -> str:
+    for candidate in candidates:
+        if candidate:
+            return str(candidate).strip()
+
+    gateway = await db.gateways.find_one({"gatewayId": gateway_id})
+    if gateway and gateway.get("trainId"):
+        return str(gateway["trainId"])
+
+    status = await db.gateway_status.find_one({"gatewayId": gateway_id})
+    if status and status.get("trainId"):
+        return str(status["trainId"])
+
+    return "019456"
+
+
+def location_box(latitude: float, longitude: float, radius_meters: float) -> dict[str, dict[str, float]]:
+    radius_degrees = max(radius_meters, 1.0) / 111_320
+    return {
+        "latitude": {"$gte": latitude - radius_degrees, "$lte": latitude + radius_degrees},
+        "longitude": {"$gte": longitude - radius_degrees, "$lte": longitude + radius_degrees},
+    }
 @app.put("/api/v1/archive")
 async def upload_archive(
     request: Request,
     archive_body: Annotated[bytes, Body(media_type="application/zip")],
-    x_gateway_id: Annotated[str, Header(alias="X-Gateway-Id")],
-    x_train_id: Annotated[str, Header(alias="X-Train-Id")],
     x_api_key: Annotated[str, Header(alias="X-Api-Key")],
     x_sha256: Annotated[str | None, Header(alias="X-Sha256")] = None,
 ):
     gateway_id = request.state.gateway_id
-    train_id = request.state.train_id
     body = archive_body
     expected_sha256 = x_sha256 or request.headers.get("X-Archive-Sha256")
     actual_sha256 = sha256(body).hexdigest()
@@ -256,13 +278,19 @@ async def upload_archive(
         or request.headers.get("X-Session-Name")
         or f"{gateway_id}-{int(now.timestamp())}"
     )
+    train_id = await resolve_train_id(
+        gateway_id,
+        metadata.get("trainId"),
+        metadata.get("trainNo"),
+        request.state.train_id,
+    )
     session_status = metadata.get("sessionStatus", "unknown")
     warnings = list(parsed.warnings)
 
     if metadata.get("gatewayId") and metadata.get("gatewayId") != gateway_id:
-        warnings.append("Metadata gatewayId does not match X-Gateway-Id header")
+        warnings.append("Metadata gatewayId does not match API key gateway")
     if metadata.get("trainId") and metadata.get("trainId") != train_id:
-        warnings.append("Metadata trainId does not match X-Train-Id header")
+        warnings.append("Metadata trainId does not match resolved train")
 
     common = {
         "gatewayId": gateway_id,
@@ -344,12 +372,12 @@ async def upload_archive(
 async def create_alert(
     data: AlertRequest,
     request: Request,
-    x_gateway_id: Annotated[str, Header(alias="X-Gateway-Id")],
-    x_train_id: Annotated[str, Header(alias="X-Train-Id")],
     x_api_key: Annotated[str, Header(alias="X-Api-Key")],
 ):
-    gateway_id = data.gatewayId or request.state.gateway_id
-    train_no = data.trainNo or request.state.train_id
+    gateway_id = request.state.gateway_id
+    if data.gatewayId and data.gatewayId != gateway_id:
+        raise HTTPException(status_code=403, detail="API key does not belong to supplied gateway")
+    train_no = await resolve_train_id(gateway_id, data.trainNo, request.state.train_id)
 
     if data.peakValueG > 80:
         color = "RED"
@@ -377,12 +405,10 @@ async def create_alert(
 async def get_calibration(
     gateway_id: str,
     request: Request,
-    x_gateway_id: Annotated[str, Header(alias="X-Gateway-Id")],
-    x_train_id: Annotated[str, Header(alias="X-Train-Id")],
     x_api_key: Annotated[str, Header(alias="X-Api-Key")],
 ):
     if gateway_id != request.state.gateway_id:
-        raise HTTPException(status_code=403, detail="Gateway header does not match calibration path")
+        raise HTTPException(status_code=403, detail="API key does not belong to calibration gateway")
 
     calibration = await db.calibration_versions.find_one(
         {"gateway_id": gateway_id},
@@ -412,12 +438,11 @@ async def get_calibration(
 async def save_calibration(
     gateway_id: str,
     data: CalibrationUpdateRequest,
-    x_gateway_id: Annotated[str, Header(alias="X-Gateway-Id")],
-    x_train_id: Annotated[str, Header(alias="X-Train-Id")],
+    request: Request,
     x_api_key: Annotated[str, Header(alias="X-Api-Key")],
 ):
-    if gateway_id != x_gateway_id:
-        raise HTTPException(status_code=403, detail="Gateway header does not match calibration path")
+    if gateway_id != request.state.gateway_id:
+        raise HTTPException(status_code=403, detail="API key does not belong to calibration gateway")
 
     gateway = await db.gateways.find_one({"gatewayId": gateway_id})
     if not gateway:
@@ -481,6 +506,57 @@ async def train_dashboard(train_no: str):
     }
 
 
+
+@app.get("/api/v1/trains/{train_no}/gateways/{gateway_id}/details")
+async def gateway_details(train_no: str, gateway_id: str):
+    gateway = await db.gateway_status.find_one({"gatewayId": gateway_id})
+    archive_count = await db.archives.count_documents({"trainId": train_no, "gatewayId": gateway_id})
+    alert_count = await db.alert_events.count_documents({"trainNo": train_no, "gatewayId": gateway_id, "sessionStatus": {"$ne": "archived"}})
+    critical_count = await db.alert_events.count_documents({"trainNo": train_no, "gatewayId": gateway_id, "alert": "RED", "sessionStatus": {"$ne": "archived"}})
+    rms_count = await db.rms_records.count_documents({"trainId": train_no, "gatewayId": gateway_id})
+    peak_count = await db.peak_records.count_documents({"trainId": train_no, "gatewayId": gateway_id})
+    fault_count = await db.fault_records.count_documents({"trainId": train_no, "gatewayId": gateway_id})
+    latest_alert = await db.alert_events.find_one(
+        {"trainNo": train_no, "gatewayId": gateway_id, "sessionStatus": {"$ne": "archived"}},
+        sort=[("createdAt", -1)],
+    )
+    latest_archive = await db.archives.find_one(
+        {"trainId": train_no, "gatewayId": gateway_id},
+        sort=[("receivedAt", -1)],
+    )
+    latest_rms = await db.rms_records.find_one(
+        {"trainId": train_no, "gatewayId": gateway_id},
+        sort=[("createdAt", -1), ("positionMm", -1)],
+    )
+    alerts = await db.alert_events.find(
+        {"trainNo": train_no, "gatewayId": gateway_id, "sessionStatus": {"$ne": "archived"}}
+    ).sort("createdAt", -1).limit(20).to_list(length=20)
+    archives = await db.archives.find({"trainId": train_no, "gatewayId": gateway_id}).sort("receivedAt", -1).limit(10).to_list(length=10)
+    faults = await db.fault_records.find({"trainId": train_no, "gatewayId": gateway_id}).sort("createdAt", -1).limit(20).to_list(length=20)
+
+    return {
+        "trainNo": train_no,
+        "gatewayId": gateway_id,
+        "status": serialize(gateway) if gateway else {"gatewayId": gateway_id, "trainId": train_no, "online": False},
+        "summary": {
+            "archives": archive_count,
+            "alerts": alert_count,
+            "criticalAlerts": critical_count,
+            "rmsRecords": rms_count,
+            "peakRecords": peak_count,
+            "faultRecords": fault_count,
+            "latestPeakG": latest_alert.get("peakValueG") if latest_alert else latest_rms.get("maxG") if latest_rms else None,
+            "latestAlert": latest_alert.get("alert") if latest_alert else latest_rms.get("color") if latest_rms else None,
+            "latestLocation": {
+                "latitude": latest_alert.get("latitude") if latest_alert else latest_rms.get("latitude") if latest_rms else None,
+                "longitude": latest_alert.get("longitude") if latest_alert else latest_rms.get("longitude") if latest_rms else None,
+            },
+            "latestArchive": serialize(latest_archive) if latest_archive else None,
+        },
+        "alerts": serialize(alerts),
+        "archives": serialize(archives),
+        "faults": serialize(faults),
+    }
 @app.get("/api/v1/trains/{train_no}/archives")
 async def train_archives(train_no: str):
     archives = await db.archives.find({"trainId": train_no}).sort("receivedAt", -1).limit(50).to_list(length=50)
@@ -565,6 +641,77 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
         }
         for item in records
     ]
+
+@app.post("/api/v1/data/reset")
+async def reset_bad_data(
+    data: TargetedResetRequest,
+    x_admin_key: Annotated[str | None, Header(alias="X-Admin-Key")] = None,
+):
+    if not x_admin_key:
+        raise HTTPException(status_code=401, detail="Missing admin reset key")
+    if not settings.get("admin_reset_key") or x_admin_key != settings["admin_reset_key"]:
+        raise HTTPException(status_code=403, detail="Invalid admin reset key")
+    if not data.startTime and not data.endTime and (data.latitude is None or data.longitude is None):
+        raise HTTPException(status_code=400, detail="Provide a time range or location for targeted cleanup")
+
+    now = utc_now()
+
+    def add_common(query: dict[str, Any], train_field: str, time_field: str) -> dict[str, Any]:
+        query[train_field] = data.trainNo
+        if data.gatewayId:
+            query["gatewayId"] = data.gatewayId
+        if data.startTime or data.endTime:
+            query[time_field] = {}
+            if data.startTime:
+                query[time_field]["$gte"] = data.startTime
+            if data.endTime:
+                query[time_field]["$lte"] = data.endTime
+        return query
+
+    location_filter = {}
+    if data.latitude is not None and data.longitude is not None:
+        location_filter = location_box(data.latitude, data.longitude, data.radiusMeters)
+
+    alert_query = add_common({}, "trainNo", "createdAt")
+    rms_query = add_common({}, "trainId", "createdAt")
+    peak_query = add_common({}, "trainId", "createdAt")
+    fault_query = add_common({}, "trainId", "createdAt")
+    archive_query = add_common({}, "trainId", "receivedAt")
+
+    if location_filter:
+        alert_query.update(location_filter)
+        rms_query.update(location_filter)
+        peak_query.update(location_filter)
+        if not (data.startTime or data.endTime):
+            fault_query = {"_id": {"$exists": False}}
+            archive_query = {"_id": {"$exists": False}}
+
+    deleted_alerts = await db.alert_events.delete_many(alert_query)
+    deleted_rms = await db.rms_records.delete_many(rms_query)
+    deleted_peak = await db.peak_records.delete_many(peak_query)
+    deleted_faults = await db.fault_records.delete_many(fault_query)
+    deleted_archives = await db.archives.delete_many(archive_query)
+
+    cleanup = {
+        "trainNo": data.trainNo,
+        "gatewayId": data.gatewayId,
+        "startTime": data.startTime,
+        "endTime": data.endTime,
+        "latitude": data.latitude,
+        "longitude": data.longitude,
+        "radiusMeters": data.radiusMeters,
+        "reason": data.reason,
+        "deleted": {
+            "alerts": deleted_alerts.deleted_count,
+            "rmsRecords": deleted_rms.deleted_count,
+            "peakRecords": deleted_peak.deleted_count,
+            "faultRecords": deleted_faults.deleted_count,
+            "archives": deleted_archives.deleted_count,
+        },
+        "createdAt": now,
+    }
+    await db.reset_events.insert_one(cleanup)
+    return {"status": "success", "message": "Targeted data removed", "cleanup": serialize(cleanup)}
 @app.post("/api/v1/sessions/reset")
 async def reset_session(
     data: ResetSessionRequest,

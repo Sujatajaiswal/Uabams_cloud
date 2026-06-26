@@ -428,3 +428,33 @@ code { font-family: Consolas, monospace; font-size: 13px; }
   background: #fef2f2;
 }
 .gateway-kpis .alert-kpi.RED strong { color: var(--red); }
+
+.inline-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.inline-controls select { min-width: 260px; }
+.detail-grid { margin-bottom: 16px; }
+.reset-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.reset-form .wide-field { grid-column: span 2; }
+.reset-form button { min-width: 190px; }
+@media (max-width: 1050px) {
+  .reset-form { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+}
+@media (max-width: 760px) {
+  .reset-form { grid-template-columns: 1fr; }
+  .reset-form .wide-field { grid-column: auto; }
+  .inline-controls { align-items: stretch; flex-direction: column; }
+  .inline-controls select, .inline-controls button { width: 100%; }
+}

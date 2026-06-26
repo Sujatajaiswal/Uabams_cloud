@@ -5,47 +5,41 @@ Base URL deployed: `https://your-render-service.onrender.com`
 
 The gateway is outbound-only. The FastAPI backend is the passive receiver. Do not implement a raw TCP handshake; HTTP over TCP already handles that.
 
-## Required Headers
+## Required Gateway Header
 
-Every gateway request to the protected endpoints must include:
+Gateway upload/authentication now requires only one header:
 
 ```text
-X-Gateway-Id: GW_UABAMS_BOGIE_01
-X-Train-Id: 019456
 X-Api-Key: shared-secret-key
 ```
 
-For train `019456`, use these prototype credentials:
+The backend identifies the gateway from the API key:
 
 ```text
-Gateway 1:
-X-Gateway-Id: GW_UABAMS_BOGIE_01
-X-Train-Id: 019456
-X-Api-Key: <GW1_API_KEY_FROM_ENV>
-
-Gateway 2:
-X-Gateway-Id: GW_UABAMS_BOGIE_02
-X-Train-Id: 019456
-X-Api-Key: <GW2_API_KEY_FROM_ENV>
+GW1 key -> GW_UABAMS_BOGIE_01
+GW2 key -> GW_UABAMS_BOGIE_02
 ```
 
-Keep these keys private. Share them with the gateway developer offline only.
+`gatewayId` and `trainId` are still stored internally in MongoDB, but the person uploading the file does not need to type them. For archive uploads, `trainId` is read from `session_metadata.json` when present; otherwise the backend uses the gateway's registered train.
+
+Keep API keys private. Share them with the gateway developer offline only.
 
 ## Protected Endpoints
 
-These endpoints require the headers above:
+These endpoints require `X-Api-Key`:
 
 ```text
 PUT  /api/v1/archive
 POST /api/v1/alert
 GET  /api/v1/calibration/{gatewayId}
+POST /api/v1/calibration/{gatewayId}
 ```
 
 On auth failure:
 
 ```text
-401 = missing headers
-403 = wrong gateway ID or API key
+401 = missing API key
+403 = wrong API key
 ```
 
 ## 1. Upload Archive
@@ -56,8 +50,6 @@ Headers:
 
 ```text
 Content-Type: application/zip
-X-Gateway-Id: GW_UABAMS_BOGIE_01
-X-Train-Id: 019456
 X-Api-Key: <secret>
 X-Sha256: <optional sha256 of zip body>
 ```
@@ -70,15 +62,25 @@ Success response:
 {
   "status": "success",
   "sha256": "calculated_hash",
-  "sizeBytes": 12345
+  "sizeBytes": 12345,
+  "rmsRecords": 24,
+  "peakRecords": 3,
+  "faultRecords": 2,
+  "peakAlerts": 3
 }
 ```
 
-MongoDB collection: `archives`
+MongoDB collections: `archives`, `rms_records`, `peak_records`, `fault_records`, `alert_events`
 
 ## 2. Send Alert
 
 `POST /api/v1/alert`
+
+Headers:
+
+```text
+X-Api-Key: <secret>
+```
 
 Request:
 
@@ -104,33 +106,41 @@ MongoDB collection: `alert_events`
 
 `GET /api/v1/calibration/GW_UABAMS_BOGIE_01`
 
-Request headers must contain the same gateway ID as the path.
+Headers:
 
-Success response:
-
-```json
-{
-  "gatewayId": "GW_UABAMS_BOGIE_01",
-  "version": 1,
-  "adxl_left": {"x": 1.0, "y": 1.0, "z": 1.0},
-  "adxl_right": {"x": 1.0, "y": 1.0, "z": 1.0},
-  "bogie": {},
-  "encoder": {}
-}
+```text
+X-Api-Key: <GW1 secret>
 ```
+
+The API key must belong to the gateway in the URL path.
 
 MongoDB collection: `calibration_versions`
 
+## 4. Dashboard Gateway Details
+
+Operators can select one gateway on the dashboard and view only that gateway's status, latest alert, RMS count, peak count, fault count, archive uploads, and recent alert history.
+
+## 5. Targeted Data Cleanup
+
+Admin cleanup endpoint:
+
+```text
+POST /api/v1/data/reset
+Header: X-Admin-Key
+```
+
+Use this only when data is bad because of server/test/upload issues. Provide a time range and/or location so only matching records are removed.
+
 ## What Gateway Developer Should Do
 
-1. Add the three headers to existing HTTP requests.
-2. Send archives with `PUT /api/v1/archive`.
-3. Send alerts with `POST /api/v1/alert`.
-4. Fetch calibration after boot using `GET /api/v1/calibration/{gatewayId}`.
-5. Treat HTTP `2xx` as success. Treat `401`, `403`, `400`, `500` as failure.
+1. Add `X-Api-Key` to upload/alert/calibration requests.
+2. Put `gatewayId` and `trainId` inside `session_metadata.json` for archive uploads.
+3. Send archives with `PUT /api/v1/archive`.
+4. Send alerts with `POST /api/v1/alert`.
+5. Fetch calibration after boot using `GET /api/v1/calibration/{gatewayId}`.
+6. Treat HTTP `2xx` as success. Treat `401`, `403`, `400`, `500` as failure.
 
-
-## Archive ZIP parsing
+## Archive ZIP Parsing
 
 When the gateway uploads a ZIP to `PUT /api/v1/archive`, the backend validates SHA-256, opens the ZIP, and parses these ICD files:
 
@@ -139,4 +149,4 @@ When the gateway uploads a ZIP to `PUT /api/v1/archive`, the backend validates S
 - `peak/peak_50m.bin` fixed 302-byte records
 - `faults/faults.bin` fixed 75-byte records
 
-Parsed RMS records feed `/api/v1/map/rms`. Peak records with `alertGenerated=true` are also inserted as alert events for the dashboard.
+Parsed RMS records feed `/api/v1/map/rms`. Peak records with `alertGenerated=true` are inserted as alert events for the dashboard.

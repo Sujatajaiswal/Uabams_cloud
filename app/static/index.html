@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UABAMS Dashboard</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/static/styles.css?v=20260625-route-clean">
+  <link rel="stylesheet" href="/static/styles.css?v=20260626-gateway-detail">
 </head>
 <body>
   <header class="app-header">
@@ -57,6 +57,7 @@
 
     <nav class="tabs" aria-label="Dashboard sections">
       <button class="tab active" data-tab="overview">Dashboard</button>
+      <button class="tab" data-tab="gatewayDetail">Gateway Details</button>
       <button class="tab" data-tab="calibration">Calibration</button>
       <button class="tab" data-tab="alerts">Alerts</button>
       <button class="tab" data-tab="archives">Archives</button>
@@ -76,7 +77,43 @@
       <div id="gatewayList" class="gateway-grid two-col"></div>
     </section>
 
-    <section id="calibration" class="panel">
+
+    <section id="gatewayDetail" class="panel">
+      <div class="section-head">
+        <h2>Selected Gateway Details</h2>
+        <div class="inline-controls">
+          <select id="detailGateway">
+            <option value="GW_UABAMS_BOGIE_01">GW1 - GW_UABAMS_BOGIE_01</option>
+            <option value="GW_UABAMS_BOGIE_02">GW2 - GW_UABAMS_BOGIE_02</option>
+          </select>
+          <button id="loadGatewayDetailBtn">Load Details</button>
+        </div>
+      </div>
+      <div class="summary-grid detail-grid">
+        <div class="metric"><span>Gateway</span><strong id="detailGatewayId">-</strong></div>
+        <div class="metric"><span>Status</span><strong id="detailStatus">-</strong></div>
+        <div class="metric"><span>Last Heartbeat</span><strong id="detailHeartbeat">-</strong></div>
+        <div class="metric"><span>Latest Alert</span><strong id="detailAlert">-</strong></div>
+        <div class="metric"><span>RMS Records</span><strong id="detailRms">-</strong></div>
+        <div class="metric"><span>Peak Records</span><strong id="detailPeak">-</strong></div>
+        <div class="metric"><span>Fault Records</span><strong id="detailFaults">-</strong></div>
+        <div class="metric"><span>Archives</span><strong id="detailArchives">-</strong></div>
+      </div>
+      <div class="section-head"><h2>Recent Alerts For Selected Gateway</h2></div>
+      <div class="table-wrap compact-table">
+        <table>
+          <thead><tr><th>Time</th><th>Peak G</th><th>Alert</th><th>Location</th></tr></thead>
+          <tbody id="detailAlertsTable"></tbody>
+        </table>
+      </div>
+      <div class="section-head"><h2>Recent Archives For Selected Gateway</h2></div>
+      <div class="table-wrap compact-table">
+        <table>
+          <thead><tr><th>Received</th><th>Size</th><th>RMS</th><th>Peak</th><th>Faults</th><th>Status</th></tr></thead>
+          <tbody id="detailArchivesTable"></tbody>
+        </table>
+      </div>
+    </section>`r`n    <section id="calibration" class="panel">
       <div class="section-head">
         <h2>Gateway Calibration</h2>
         <button id="loadAllCalibrationBtn">Load Both</button>
@@ -141,11 +178,27 @@
         </div>
         <button id="resetBtn" class="danger">Reset Train Session</button>
       </div>
-      <pre id="resetOutput" class="output"></pre>
+      <div class="section-head"><h2>Targeted Data Cleanup</h2></div>
+      <div class="reset-form">
+        <label>Gateway
+          <select id="cleanupGateway">
+            <option value="">All Gateways</option>
+            <option value="GW_UABAMS_BOGIE_01">GW1</option>
+            <option value="GW_UABAMS_BOGIE_02">GW2</option>
+          </select>
+        </label>
+        <label>Start Time<input id="cleanupStart" type="datetime-local"></label>
+        <label>End Time<input id="cleanupEnd" type="datetime-local"></label>
+        <label>Latitude<input id="cleanupLat" type="number" step="0.000001" placeholder="Optional"></label>
+        <label>Longitude<input id="cleanupLon" type="number" step="0.000001" placeholder="Optional"></label>
+        <label>Radius Meters<input id="cleanupRadius" type="number" step="1" value="100"></label>
+        <label class="wide-field">Reason<input id="cleanupReason" placeholder="Server issue / wrong test upload"></label>
+        <button id="cleanupBtn" class="danger">Delete Matching Data</button>
+      </div>`r`n      <pre id="resetOutput" class="output"></pre>
     </section>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=20260625-route-clean"></script>
+  <script src="/static/app.js?v=20260626-gateway-detail"></script>
 </body>
 </html>

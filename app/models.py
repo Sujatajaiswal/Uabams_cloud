@@ -48,6 +48,17 @@ class ResetSessionRequest(BaseModel):
     trainNo: str
 
 
+class TargetedResetRequest(BaseModel):
+    trainNo: str
+    gatewayId: str | None = None
+    startTime: datetime | None = None
+    endTime: datetime | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    radiusMeters: float = 100.0
+    reason: str | None = None
+
+
 class GatewayStatus(BaseModel):
     gatewayId: str
     online: bool

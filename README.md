@@ -29,13 +29,7 @@ GET  /api/v1/trains/{trainNo}/dashboard
 POST /api/v1/sessions/reset
 ```
 
-Gateway APIs require:
-
-```text
-X-Gateway-Id
-X-Train-Id
-X-Api-Key
-```
+Gateway upload/authentication APIs require only:`r`n`r`n```text`r`nX-Api-Key`r`n```
 
 Reset requires:
 
@@ -46,12 +40,14 @@ X-Admin-Key
 ## Frontend Screens
 
 - Dashboard with separate GW1/GW2 status boxes
+- Gateway Details screen to select one gateway and view only that gateway data
 - Online gateway boxes show green, offline boxes show red
 - Calibration split into GW1 and GW2 panels
 - Calibration save is blocked until "Destination reached" is selected
 - Alert screen uses Leaflet + OpenStreetMap with separate maps for GW1 and GW2
 - Archive upload history with parsed RMS/peak/fault counts
 - Protected reset session screen
+- Admin targeted cleanup by time range and/or location
 
 
 ## Archive Parsing
