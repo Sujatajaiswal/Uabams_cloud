@@ -444,11 +444,11 @@ code { font-family: Consolas, monospace; font-size: 13px; }
 
 .hidden { display: none !important; }
 .gateway-toolbar {
-  grid-template-columns: minmax(260px, 360px) 136px;
+  grid-template-columns: minmax(180px, 240px) minmax(260px, 420px) 150px;
   justify-content: start;
   align-items: end;
 }
-.gateway-toolbar select { min-width: 100%; }
+.gateway-toolbar input, .gateway-toolbar select { min-width: 100%; }
 .gateway-detail-section { margin-top: 18px; }
 .reset-actions {
   display: grid;

@@ -1,6 +1,7 @@
 const state = { dashboard: null, rmsPoints: [], mapAlerts: [], selectedGateway: '' };
-const gatewayIds = ['GW_UABAMS_BOGIE_01', 'GW_UABAMS_BOGIE_02'];
-const gatewayLabels = { GW_UABAMS_BOGIE_01: 'GW1', GW_UABAMS_BOGIE_02: 'GW2' };
+const defaultGatewayIds = ['GW_UABAMS_BOGIE_01', 'GW_UABAMS_BOGIE_02'];
+const gatewayIds = defaultGatewayIds;
+let dashboardGatewayIds = [...defaultGatewayIds];
 const maps = {};
 const layers = {};
 
@@ -32,7 +33,14 @@ function selectedGatewayValue() {
 
 function visibleGatewayIds() {
   const selected = selectedGatewayValue();
-  return selected ? [selected] : gatewayIds;
+  return selected ? [selected] : dashboardGatewayIds;
+}
+
+function gatewayLabel(gatewayId) {
+  const index = dashboardGatewayIds.indexOf(gatewayId);
+  if (index >= 0) return `GW${index + 1}`;
+  const fallbackIndex = defaultGatewayIds.indexOf(gatewayId);
+  return fallbackIndex >= 0 ? `GW${fallbackIndex + 1}` : gatewayId;
 }
 
 function trainNoValue() {
@@ -41,6 +49,43 @@ function trainNoValue() {
 
 function gatewayHeaders() {
   return {};
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function collectGatewayIds(data) {
+  const trainIds = Array.isArray(data.train?.gateways) ? data.train.gateways : [];
+  const statusIds = Array.isArray(data.gateways) ? data.gateways.map((gw) => gw.gatewayId) : [];
+  const ids = [...trainIds, ...statusIds].filter(Boolean);
+  return [...new Set(ids)];
+}
+
+function updateGatewaySelector(data) {
+  const select = $('dashboardGateway');
+  if (!select) return;
+  const previous = select.value;
+  const ids = collectGatewayIds(data);
+  dashboardGatewayIds = ids.length ? ids : [...defaultGatewayIds];
+  const optionsHtml = [
+    '<option value="">All Gateways</option>',
+    ...dashboardGatewayIds.map((gatewayId) => `<option value="${escapeHtml(gatewayId)}">${escapeHtml(`${gatewayLabel(gatewayId)} - ${gatewayId}`)}</option>`),
+  ].join('');
+  select.innerHTML = optionsHtml;
+  select.value = dashboardGatewayIds.includes(previous) ? previous : '';
+
+  const cleanup = $('cleanupGateway');
+  if (cleanup) {
+    const cleanupPrevious = cleanup.value;
+    cleanup.innerHTML = optionsHtml;
+    cleanup.value = dashboardGatewayIds.includes(cleanupPrevious) ? cleanupPrevious : '';
+  }
 }
 
 async function requestJson(url, options = {}) {
@@ -138,7 +183,7 @@ function routePopup(point) {
   const positionKm = Number.isFinite(Number(point.position_mm)) ? `${(Number(point.position_mm) / 1000).toFixed(2)} km` : '-';
   return `
     <div class="leaflet-popup-content-box">
-      <strong>${normalizeAlert(point.color)} - ${gatewayLabels[point.gateway_id] || point.gateway_id}</strong><br>
+      <strong>${normalizeAlert(point.color)} - ${gatewayLabel(point.gateway_id)}</strong><br>
       <span>Session:</span> ${point.session || '-'}<br>
       <span>Peak:</span> ${point.peak_g ?? '-'} G<br>
       <span>Position:</span> ${positionKm}<br>
@@ -163,6 +208,7 @@ function syncCleanupGateway() {
 }
 function renderDashboard(data) {
   state.dashboard = data;
+  updateGatewaySelector(data);
   const selectedGateway = selectedGatewayValue();
   state.selectedGateway = selectedGateway;
   const train = data.train || {};
@@ -195,7 +241,7 @@ function renderDashboard(data) {
     return `
       <article class="gateway-card ${statusClass}">
         <div class="gateway-title">
-          <span>${gatewayLabels[gatewayId]} - ${gatewayId}</span>
+          <span>${gatewayLabel(gatewayId)} - ${gatewayId}</span>
           <span class="badge ${gw.online ? 'online' : 'offline'}">${gw.online ? 'Online' : 'Offline'}</span>
         </div>
         <div class="gateway-kpis">
@@ -453,7 +499,7 @@ function renderSession(session, trainNo) {
 }
 
 function calibrationCard(gatewayId) {
-  const label = gatewayLabels[gatewayId];
+  const label = gatewayLabel(gatewayId);
   return `
     <article class="calibration-card" data-gateway="${gatewayId}">
       <div class="gateway-title">
@@ -631,7 +677,12 @@ function boot() {
   initializeMaps();
   buildCalibrationCards();
   $('searchBtn')?.addEventListener('click', loadDashboard);
-  $('dashboardGateway')?.addEventListener('change', loadDashboard);
+  $('dashboardGateway')?.addEventListener('change', () => {
+    if (state.dashboard) renderDashboard(state.dashboard);
+  });
+  $('trainNo')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') loadDashboard();
+  });
   $('loadAllCalibrationBtn')?.addEventListener('click', loadAllCalibration);
   $('resetBtn')?.addEventListener('click', resetSession);
   $('cleanupBtn')?.addEventListener('click', cleanupData);

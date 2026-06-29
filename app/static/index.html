@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UABAMS Dashboard</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/static/styles.css?v=20260626-no-banner">
+  <link rel="stylesheet" href="/static/styles.css?v=20260629-train-search">
 </head>
 <body>
   <header class="app-header">
@@ -20,17 +20,18 @@
   </header>
 
   <main class="layout">
-    <section class="toolbar gateway-toolbar" aria-label="Gateway selector">
-      <input id="trainNo" type="hidden" value="019456">
+    <section class="toolbar gateway-toolbar" aria-label="Train and gateway selector">
+      <label>
+        Search Train No
+        <input id="trainNo" type="text" value="019456" placeholder="Enter train number">
+      </label>
       <label>
         Gateway
         <select id="dashboardGateway">
           <option value="">All Gateways</option>
-          <option value="GW_UABAMS_BOGIE_01">GW1 - GW_UABAMS_BOGIE_01</option>
-          <option value="GW_UABAMS_BOGIE_02">GW2 - GW_UABAMS_BOGIE_02</option>
         </select>
       </label>
-      <button id="searchBtn" class="primary">Load Details</button>
+      <button id="searchBtn" class="primary">Search Train</button>
     </section>
     <nav class="tabs" aria-label="Dashboard sections">
       <button class="tab active" data-tab="overview">Dashboard</button>
@@ -171,6 +172,6 @@
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=20260626-no-banner"></script>
+  <script src="/static/app.js?v=20260629-train-search"></script>
 </body>
 </html>
