@@ -25,6 +25,8 @@ FAULT_FORMAT = "<QBBB64s"
 
 SENTINEL_U32 = 0xFFFFFFFF
 AXIS_NAMES = ("al_x", "al_y", "al_z", "ar_x", "ar_y", "ar_z", "bg_x", "bg_y", "bg_z")
+EXPECTED_RMS_INTERVAL_MM = 250
+RMS_INTERVAL_TOLERANCE_MM = 25
 
 FAULT_CODE_NAMES = {
     0x00: "FAULT_NONE",
@@ -50,6 +52,8 @@ class ParsedArchive:
     peak_records: list[dict[str, Any]] = field(default_factory=list)
     fault_records: list[dict[str, Any]] = field(default_factory=list)
     raw_file_manifest: list[dict[str, Any]] = field(default_factory=list)
+    raw_files: list[dict[str, Any]] = field(default_factory=list)
+    rms_validation: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -58,11 +62,19 @@ def parse_archive_zip(body: bytes) -> ParsedArchive:
         with zipfile.ZipFile(BytesIO(body)) as archive:
             result = ParsedArchive(files=archive.namelist())
             result.metadata = _read_metadata(archive, result.warnings)
-            result.raw_file_manifest = _raw_manifest(archive)
+            result.raw_files = _read_raw_files(archive)
+            result.raw_file_manifest = [
+                {"path": item["path"], "sizeBytes": item["sizeBytes"]}
+                for item in result.raw_files
+            ]
 
             rms_name = _find_member(archive, "rms/rms_25cm.bin")
             if rms_name:
                 result.rms_records = parse_rms_bytes(archive.read(rms_name), result.warnings)
+                result.rms_validation = validate_rms_intervals(
+                    result.rms_records,
+                    result.warnings,
+                )
             else:
                 result.warnings.append("Missing rms/rms_25cm.bin")
 
@@ -245,6 +257,65 @@ def parse_fault_bytes(raw: bytes, warnings: list[str] | None = None) -> list[dic
     return records
 
 
+def validate_rms_intervals(
+    records: list[dict[str, Any]],
+    warnings: list[str] | None = None,
+    expected_mm: int = EXPECTED_RMS_INTERVAL_MM,
+    tolerance_mm: int = RMS_INTERVAL_TOLERANCE_MM,
+) -> dict[str, Any]:
+    if not records:
+        return {
+            "expectedIntervalMm": expected_mm,
+            "toleranceMm": tolerance_mm,
+            "totalIntervals": 0,
+            "validIntervals": 0,
+            "invalidIntervals": 0,
+            "validPercent": 100.0,
+        }
+
+    records[0]["spatialIntervalMm"] = None
+    records[0]["spatialIntervalValid"] = None
+    intervals: list[int] = []
+    invalid = 0
+
+    previous_position = records[0].get("positionMm")
+    for record in records[1:]:
+        position = record.get("positionMm")
+        if position is None or previous_position is None:
+            record["spatialIntervalMm"] = None
+            record["spatialIntervalValid"] = False
+            invalid += 1
+        else:
+            interval = abs(int(position) - int(previous_position))
+            valid = abs(interval - expected_mm) <= tolerance_mm
+            record["spatialIntervalMm"] = interval
+            record["spatialIntervalValid"] = valid
+            intervals.append(interval)
+            if not valid:
+                invalid += 1
+        previous_position = position
+
+    total = len(records) - 1
+    valid_count = total - invalid
+    summary = {
+        "expectedIntervalMm": expected_mm,
+        "toleranceMm": tolerance_mm,
+        "totalIntervals": total,
+        "validIntervals": valid_count,
+        "invalidIntervals": invalid,
+        "validPercent": round((valid_count / total) * 100, 2) if total else 100.0,
+        "minimumIntervalMm": min(intervals) if intervals else None,
+        "maximumIntervalMm": max(intervals) if intervals else None,
+        "averageIntervalMm": round(sum(intervals) / len(intervals), 2) if intervals else None,
+    }
+    if invalid and warnings is not None:
+        warnings.append(
+            f"rms/rms_25cm.bin has {invalid} of {total} intervals outside "
+            f"{expected_mm} +/- {tolerance_mm} mm"
+        )
+    return summary
+
+
 def peak_records_to_alert_events(
     peak_records: list[dict[str, Any]],
     gateway_id: str,
@@ -294,13 +365,21 @@ def _read_metadata(archive: zipfile.ZipFile, warnings: list[str]) -> dict[str, A
         return {}
 
 
-def _raw_manifest(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
-    manifest = []
+def _read_raw_files(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
+    files = []
     for info in archive.infolist():
         normalized = _normalize_path(info.filename)
-        if normalized.startswith("raw/") and not info.is_dir():
-            manifest.append({"path": normalized, "sizeBytes": info.file_size})
-    return manifest
+        path_parts = normalized.split("/")
+        if "raw" in path_parts and not info.is_dir():
+            raw_index = path_parts.index("raw")
+            files.append(
+                {
+                    "path": "/".join(path_parts[raw_index:]),
+                    "sizeBytes": info.file_size,
+                    "data": archive.read(info.filename),
+                }
+            )
+    return files
 
 
 def _find_member(archive: zipfile.ZipFile, suffix: str) -> str | None:

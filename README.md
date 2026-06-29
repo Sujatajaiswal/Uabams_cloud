@@ -60,6 +60,13 @@ X-Admin-Key
 - `faults/faults.bin` into `fault_records`
 
 The route maps call `GET /api/v1/map/rms?train_id=019456` and draw colored OpenStreetMap route points from parsed RMS records.
+
+## Spatial Validation, Compensation, and Retention
+
+- RMS records are validated against a fixed 250 mm interval with a +/- 25 mm tolerance. Each record stores `spatialIntervalMm` and `spatialIntervalValid`; the archive stores a validation summary and warning count.
+- The latest saved calibration is applied during archive ingestion. The backend uses `(leftWheelFactor + rightWheelFactor) / 2` to compensate distance and speed, while preserving `rawPositionMm` and `rawSpeedKmph`.
+- `rms_records`, `peak_records`, `alert_events`, `fault_records`, and archive metadata have MongoDB TTL indexes for 30-day retention.
+- Raw `raw/*.bin` time-domain files are stored in `time_domain_files` and `time_domain_chunks` with a 7-day expiry. Files are split into 8 MB chunks to stay below MongoDB document limits.
 ## Render Deployment
 
 Use `render.yaml`, then add these environment variables in Render:

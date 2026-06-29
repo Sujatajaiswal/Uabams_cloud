@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from math import isfinite
 from pathlib import Path
 from secrets import token_hex
 from typing import Annotated, Any
@@ -30,6 +31,11 @@ app = FastAPI(
 app.add_middleware(GatewayAuthMiddleware)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+SPATIAL_RETENTION_DAYS = 30
+TIME_DOMAIN_RETENTION_DAYS = 7
+SPATIAL_RETENTION_SECONDS = SPATIAL_RETENTION_DAYS * 24 * 60 * 60
+RAW_TIME_DOMAIN_CHUNK_BYTES = 8 * 1024 * 1024
+
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
@@ -47,6 +53,131 @@ def serialize(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: serialize(item) for key, item in value.items()}
     return value
+
+
+def _positive_factor(value: Any, default: float = 1.0) -> float:
+    try:
+        factor = float(value)
+    except (TypeError, ValueError):
+        return default
+    return factor if isfinite(factor) and factor > 0 else default
+
+
+def apply_wheel_compensation(
+    rms_records: list[dict[str, Any]],
+    peak_records: list[dict[str, Any]],
+    calibration: dict[str, Any] | None,
+) -> dict[str, Any]:
+    calibration = calibration or {}
+    left_factor = _positive_factor(calibration.get("leftWheelFactor"))
+    right_factor = _positive_factor(calibration.get("rightWheelFactor"))
+    combined_factor = (left_factor + right_factor) / 2.0
+
+    def compensate_position(record: dict[str, Any], field: str) -> None:
+        value = record.get(field)
+        if value is None:
+            return
+        raw_field = f"raw{field[0].upper()}{field[1:]}"
+        record[raw_field] = value
+        record[field] = int(round(float(value) * combined_factor))
+
+    def compensate_speed(record: dict[str, Any]) -> None:
+        value = record.get("speedKmph")
+        if value is None:
+            return
+        record["rawSpeedKmph"] = value
+        record["speedKmph"] = round(float(value) * combined_factor, 2)
+
+    for record in rms_records:
+        compensate_position(record, "positionMm")
+        compensate_speed(record)
+        record["wheelCompensationFactor"] = round(combined_factor, 6)
+
+    for record in peak_records:
+        compensate_position(record, "windowStartMm")
+        compensate_position(record, "windowEndMm")
+        compensate_position(record, "positionMm")
+        compensate_speed(record)
+        for axis in record.get("axes", {}).values():
+            compensate_position(axis, "peakPositionMm")
+        record["wheelCompensationFactor"] = round(combined_factor, 6)
+
+    return {
+        "leftWheelFactor": left_factor,
+        "rightWheelFactor": right_factor,
+        "combinedFactor": round(combined_factor, 6),
+        "calibrationVersion": calibration.get("version"),
+        "applied": abs(combined_factor - 1.0) > 1e-9,
+    }
+
+
+async def store_time_domain_files(
+    raw_files: list[dict[str, Any]],
+    gateway_id: str,
+    train_id: str,
+    session_name: str,
+    archive_sha256: str,
+    created_at: datetime,
+) -> list[dict[str, Any]]:
+    await db.time_domain_chunks.delete_many(
+        {"archiveSha256": archive_sha256, "gatewayId": gateway_id}
+    )
+    await db.time_domain_files.delete_many(
+        {"archiveSha256": archive_sha256, "gatewayId": gateway_id}
+    )
+
+    expires_at = created_at + timedelta(days=TIME_DOMAIN_RETENTION_DAYS)
+    stored_files: list[dict[str, Any]] = []
+    chunk_documents: list[dict[str, Any]] = []
+
+    for raw_file in raw_files:
+        payload = bytes(raw_file.get("data", b""))
+        file_id = ObjectId()
+        chunks = [
+            payload[offset : offset + RAW_TIME_DOMAIN_CHUNK_BYTES]
+            for offset in range(0, len(payload), RAW_TIME_DOMAIN_CHUNK_BYTES)
+        ]
+        file_document = {
+            "_id": file_id,
+            "gatewayId": gateway_id,
+            "trainId": train_id,
+            "sessionName": session_name,
+            "archiveSha256": archive_sha256,
+            "path": raw_file.get("path"),
+            "sizeBytes": len(payload),
+            "sha256": sha256(payload).hexdigest(),
+            "chunkCount": len(chunks),
+            "createdAt": created_at,
+            "expiresAt": expires_at,
+        }
+        await db.time_domain_files.insert_one(file_document)
+        for index, chunk in enumerate(chunks):
+            chunk_documents.append(
+                {
+                    "fileId": file_id,
+                    "gatewayId": gateway_id,
+                    "trainId": train_id,
+                    "archiveSha256": archive_sha256,
+                    "chunkIndex": index,
+                    "data": chunk,
+                    "createdAt": created_at,
+                    "expiresAt": expires_at,
+                }
+            )
+        stored_files.append(
+            {
+                "fileId": str(file_id),
+                "path": file_document["path"],
+                "sizeBytes": file_document["sizeBytes"],
+                "sha256": file_document["sha256"],
+                "chunkCount": file_document["chunkCount"],
+                "expiresAt": expires_at,
+            }
+        )
+
+    if chunk_documents:
+        await db.time_domain_chunks.insert_many(chunk_documents)
+    return stored_files
 
 
 def create_gateway_token(gateway_id: str, train_id: str | None = None) -> str:
@@ -88,6 +219,31 @@ async def startup() -> None:
     await db.peak_records.create_index([("archiveSha256", 1)])
     await db.fault_records.create_index([("trainId", 1), ("gatewayId", 1), ("timestampMs", 1)])
     await db.fault_records.create_index([("archiveSha256", 1)])
+    await db.rms_records.create_index(
+        "createdAt", expireAfterSeconds=SPATIAL_RETENTION_SECONDS, name="ttl_rms_30_days"
+    )
+    await db.peak_records.create_index(
+        "createdAt", expireAfterSeconds=SPATIAL_RETENTION_SECONDS, name="ttl_peak_30_days"
+    )
+    await db.alert_events.create_index(
+        "createdAt", expireAfterSeconds=SPATIAL_RETENTION_SECONDS, name="ttl_alerts_30_days"
+    )
+    await db.fault_records.create_index(
+        "createdAt", expireAfterSeconds=SPATIAL_RETENTION_SECONDS, name="ttl_faults_30_days"
+    )
+    await db.archives.create_index(
+        "receivedAt", expireAfterSeconds=SPATIAL_RETENTION_SECONDS, name="ttl_archives_30_days"
+    )
+    await db.time_domain_files.create_index(
+        "expiresAt", expireAfterSeconds=0, name="ttl_time_domain_files_7_days"
+    )
+    await db.time_domain_files.create_index(
+        [("gatewayId", 1), ("sessionName", 1), ("path", 1)]
+    )
+    await db.time_domain_chunks.create_index(
+        "expiresAt", expireAfterSeconds=0, name="ttl_time_domain_chunks_7_days"
+    )
+    await db.time_domain_chunks.create_index([("fileId", 1), ("chunkIndex", 1)], unique=True)
     await db.sessions.create_index([("trainNo", 1), ("status", 1)])
     await db.reset_events.create_index([("trainNo", 1), ("createdAt", -1)])
 
@@ -294,6 +450,16 @@ async def upload_archive(
     if metadata.get("trainId") and metadata.get("trainId") != train_id:
         warnings.append("Metadata trainId does not match resolved train")
 
+    calibration = await db.calibration_versions.find_one(
+        {"gateway_id": gateway_id},
+        sort=[("version", -1)],
+    )
+    wheel_compensation = apply_wheel_compensation(
+        parsed.rms_records,
+        parsed.peak_records,
+        calibration,
+    )
+
     common = {
         "gatewayId": gateway_id,
         "trainId": train_id,
@@ -328,6 +494,15 @@ async def upload_archive(
     if peak_alerts:
         await db.alert_events.insert_many(peak_alerts)
 
+    stored_raw_files = await store_time_domain_files(
+        parsed.raw_files,
+        gateway_id,
+        train_id,
+        session_name,
+        actual_sha256,
+        now,
+    )
+
     document = {
         "gatewayId": gateway_id,
         "trainId": train_id,
@@ -338,7 +513,11 @@ async def upload_archive(
         "sessionStatus": session_status,
         "metadata": metadata,
         "filesInZip": parsed.files,
-        "rawFiles": parsed.raw_file_manifest,
+        "rawFiles": stored_raw_files,
+        "rmsIntervalValidation": parsed.rms_validation,
+        "wheelCompensation": wheel_compensation,
+        "spatialRetentionDays": SPATIAL_RETENTION_DAYS,
+        "timeDomainRetentionDays": TIME_DOMAIN_RETENTION_DAYS,
         "rmsRecordCount": len(rms_records),
         "peakRecordCount": len(peak_records),
         "faultRecordCount": len(fault_records),
@@ -367,6 +546,13 @@ async def upload_archive(
         "peakRecords": len(peak_records),
         "faultRecords": len(fault_records),
         "peakAlerts": len(peak_alerts),
+        "rmsIntervalValidation": parsed.rms_validation,
+        "wheelCompensation": wheel_compensation,
+        "rawTimeDomainFiles": len(stored_raw_files),
+        "retention": {
+            "spatialAndAlertsDays": SPATIAL_RETENTION_DAYS,
+            "timeDomainDays": TIME_DOMAIN_RETENTION_DAYS,
+        },
         "warnings": warnings,
     }
 
@@ -417,6 +603,8 @@ async def get_calibration(
         return {
             "gatewayId": gateway_id,
             "version": calibration.get("version"),
+            "leftWheelFactor": calibration.get("leftWheelFactor", 1.0),
+            "rightWheelFactor": calibration.get("rightWheelFactor", 1.0),
             "adxl_left": calibration.get("adxl_left", {}),
             "adxl_right": calibration.get("adxl_right", {}),
             "bogie": calibration.get("bogie", {}),
@@ -426,6 +614,8 @@ async def get_calibration(
     return {
         "gatewayId": gateway_id,
         "version": 1,
+        "leftWheelFactor": 1.0,
+        "rightWheelFactor": 1.0,
         "adxl_left": {"x": 1.0, "y": 1.0, "z": 1.0},
         "adxl_right": {"x": 1.0, "y": 1.0, "z": 1.0},
         "bogie": {},
@@ -673,6 +863,8 @@ async def reset_bad_data(
     peak_query = add_common({}, "trainId", "createdAt")
     fault_query = add_common({}, "trainId", "createdAt")
     archive_query = add_common({}, "trainId", "receivedAt")
+    time_domain_file_query = add_common({}, "trainId", "createdAt")
+    time_domain_chunk_query = add_common({}, "trainId", "createdAt")
 
     if location_filter:
         alert_query.update(location_filter)
@@ -681,12 +873,16 @@ async def reset_bad_data(
         if not (data.startTime or data.endTime):
             fault_query = {"_id": {"$exists": False}}
             archive_query = {"_id": {"$exists": False}}
+            time_domain_file_query = {"_id": {"$exists": False}}
+            time_domain_chunk_query = {"_id": {"$exists": False}}
 
     deleted_alerts = await db.alert_events.delete_many(alert_query)
     deleted_rms = await db.rms_records.delete_many(rms_query)
     deleted_peak = await db.peak_records.delete_many(peak_query)
     deleted_faults = await db.fault_records.delete_many(fault_query)
     deleted_archives = await db.archives.delete_many(archive_query)
+    deleted_time_domain_files = await db.time_domain_files.delete_many(time_domain_file_query)
+    deleted_time_domain_chunks = await db.time_domain_chunks.delete_many(time_domain_chunk_query)
 
     cleanup = {
         "trainNo": data.trainNo,
@@ -703,6 +899,8 @@ async def reset_bad_data(
             "peakRecords": deleted_peak.deleted_count,
             "faultRecords": deleted_faults.deleted_count,
             "archives": deleted_archives.deleted_count,
+            "timeDomainFiles": deleted_time_domain_files.deleted_count,
+            "timeDomainChunks": deleted_time_domain_chunks.deleted_count,
         },
         "createdAt": now,
     }

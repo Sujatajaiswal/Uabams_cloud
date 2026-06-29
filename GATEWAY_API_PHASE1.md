@@ -66,11 +66,26 @@ Success response:
   "rmsRecords": 24,
   "peakRecords": 3,
   "faultRecords": 2,
-  "peakAlerts": 3
+  "peakAlerts": 3,
+  "rmsIntervalValidation": {
+    "expectedIntervalMm": 250,
+    "toleranceMm": 25,
+    "invalidIntervals": 0
+  },
+  "wheelCompensation": {
+    "leftWheelFactor": 1.0,
+    "rightWheelFactor": 1.0,
+    "combinedFactor": 1.0
+  },
+  "rawTimeDomainFiles": 4,
+  "retention": {
+    "spatialAndAlertsDays": 30,
+    "timeDomainDays": 7
+  }
 }
 ```
 
-MongoDB collections: `archives`, `rms_records`, `peak_records`, `fault_records`, `alert_events`
+MongoDB collections: `archives`, `rms_records`, `peak_records`, `fault_records`, `alert_events`, `time_domain_files`, `time_domain_chunks`
 
 ## 2. Send Alert
 
