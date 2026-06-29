@@ -47,8 +47,19 @@ function trainNoValue() {
   return $('trainNo')?.value.trim() || '019456';
 }
 
-function gatewayHeaders() {
-  return {};
+function gatewayApiKey(gatewayId) {
+  const card = cardFor(gatewayId);
+  const inputValue = field(card, 'apiKey')?.value.trim();
+  if (inputValue) {
+    localStorage.setItem(`uabams_api_key_${gatewayId}`, inputValue);
+    return inputValue;
+  }
+  return localStorage.getItem(`uabams_api_key_${gatewayId}`) || '';
+}
+
+function gatewayHeaders(gatewayId) {
+  const apiKey = gatewayApiKey(gatewayId);
+  return apiKey ? { 'X-Api-Key': apiKey } : {};
 }
 
 function escapeHtml(value) {
@@ -506,6 +517,7 @@ function calibrationCard(gatewayId) {
         <span>${label} Calibration</span>
         <span class="badge offline" data-role="calStatus">Pending</span>
       </div>
+      <label class="api-key-field">Gateway API Key<input data-field="apiKey" type="password" value="${escapeHtml(localStorage.getItem(`uabams_api_key_${gatewayId}`) || '')}" placeholder="Enter ${label} API key"></label>
       <label class="checkline"><input type="checkbox" data-field="routeComplete"> Destination reached</label>
       <div class="calibration-form compact-form">
         <label>Left Wheel Factor<input data-field="leftWheelFactor" type="number" step="0.001" value="1"></label>
@@ -563,6 +575,11 @@ function setCalibrationValues(gatewayId, data) {
 async function loadCalibration(gatewayId) {
   const card = cardFor(gatewayId);
   const output = card?.querySelector('[data-role="calOutput"]');
+  if (!gatewayApiKey(gatewayId)) {
+    if (output) output.textContent = `Enter the API key for ${gatewayLabel(gatewayId)} before loading calibration.`;
+    return;
+  }
+
   try {
     const data = await requestJson(`/api/v1/calibration/${encodeURIComponent(gatewayId)}`, { headers: gatewayHeaders(gatewayId) });
     setCalibrationValues(gatewayId, data);
@@ -588,6 +605,10 @@ async function saveCalibration(gatewayId) {
   const output = card?.querySelector('[data-role="calOutput"]');
   if (!field(card, 'routeComplete')?.checked) {
     if (output) output.textContent = 'Calibration not saved. Mark Destination reached only when the train has completed the start-to-destination run.';
+    return;
+  }
+  if (!gatewayApiKey(gatewayId)) {
+    if (output) output.textContent = `Enter the API key for ${gatewayLabel(gatewayId)} before saving calibration.`;
     return;
   }
 

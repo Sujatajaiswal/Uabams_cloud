@@ -29,7 +29,11 @@ GET  /api/v1/trains/{trainNo}/dashboard
 POST /api/v1/sessions/reset
 ```
 
-Gateway upload/authentication APIs require only:`r`n`r`n```text`r`nX-Api-Key`r`n```
+Gateway upload, alert, and calibration APIs require:
+
+```text
+X-Api-Key
+```
 
 Reset requires:
 

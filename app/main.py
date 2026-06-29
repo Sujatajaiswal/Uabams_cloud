@@ -386,6 +386,15 @@ async def heartbeat(data: HeartbeatRequest):
 
 
 
+def require_gateway_path_match(request: Request, gateway_id: str) -> None:
+    authenticated_gateway = getattr(request.state, "gateway_id", None)
+    if authenticated_gateway != gateway_id:
+        raise HTTPException(
+            status_code=403,
+            detail="API key does not belong to requested gateway",
+        )
+
+
 async def resolve_train_id(gateway_id: str, *candidates: str | None) -> str:
     for candidate in candidates:
         if candidate:
@@ -593,7 +602,9 @@ async def create_alert(
 async def get_calibration(
     gateway_id: str,
     request: Request,
+    x_api_key: Annotated[str, Header(alias="X-Api-Key")],
 ):
+    require_gateway_path_match(request, gateway_id)
 
     calibration = await db.calibration_versions.find_one(
         {"gateway_id": gateway_id},
@@ -628,7 +639,9 @@ async def save_calibration(
     gateway_id: str,
     data: CalibrationUpdateRequest,
     request: Request,
+    x_api_key: Annotated[str, Header(alias="X-Api-Key")],
 ):
+    require_gateway_path_match(request, gateway_id)
 
     gateway = await db.gateways.find_one({"gatewayId": gateway_id})
     if not gateway:

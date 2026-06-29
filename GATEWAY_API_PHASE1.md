@@ -26,14 +26,16 @@ Keep API keys private. Share them with the gateway developer offline only.
 
 ## Protected Endpoints
 
-These gateway ingest endpoints require `X-Api-Key`:
+These gateway endpoints require `X-Api-Key`:
 
 ```text
 PUT  /api/v1/archive
 POST /api/v1/alert
+GET  /api/v1/calibration/{gatewayId}
+POST /api/v1/calibration/{gatewayId}
 ```
 
-Calibration endpoints are currently not protected by `GatewayAuthMiddleware`. They are used by the dashboard/operator flow and return the latest saved calibration for a gateway.
+For calibration, the API key must belong to the same gateway as the `{gatewayId}` path value.
 
 On auth failure:
 
@@ -121,7 +123,13 @@ MongoDB collection: `alert_events`
 
 `GET /api/v1/calibration/GW_UABAMS_BOGIE_01`
 
-No gateway auth header is required in the current backend. The endpoint reads the latest calibration document for the gateway from MongoDB. If no calibration is saved yet, it returns default values of `1.0`.
+Header required:
+
+```text
+X-Api-Key: <GW1 secret>
+```
+
+The API key must belong to `GW_UABAMS_BOGIE_01`. The endpoint reads the latest calibration document for the gateway from MongoDB. If no calibration is saved yet, it returns default values of `1.0`.
 
 MongoDB collection: `calibration_versions`
 
@@ -142,11 +150,11 @@ Use this only when data is bad because of server/test/upload issues. Provide a t
 
 ## What Gateway Developer Should Do
 
-1. Add `X-Api-Key` to upload and alert requests.
+1. Add `X-Api-Key` to upload, alert, and calibration requests.
 2. Put `gatewayId` and `trainId` inside `session_metadata.json` for archive uploads.
 3. Send archives with `PUT /api/v1/archive`.
 4. Send alerts with `POST /api/v1/alert`.
-5. Fetch calibration after boot using `GET /api/v1/calibration/{gatewayId}`. No API key is required for calibration in the current backend.
+5. Fetch calibration after boot using `GET /api/v1/calibration/{gatewayId}` with the matching gateway API key.
 6. Treat HTTP `2xx` as success. Treat `401`, `403`, `400`, `500` as failure.
 
 ## Archive ZIP Parsing

@@ -299,6 +299,8 @@ code { font-family: Consolas, monospace; font-size: 13px; }
   border-radius: 6px;
   background: var(--surface-2);
 }
+.api-key-field { display: block; margin-top: 12px; }
+.api-key-field input { margin-top: 6px; }
 .compact-form { grid-template-columns: repeat(2, minmax(140px, 1fr)); margin-top: 12px; }
 .checkline {
   display: flex;
