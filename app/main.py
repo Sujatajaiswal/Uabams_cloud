@@ -1,14 +1,16 @@
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from hmac import compare_digest
 from math import isfinite
 from pathlib import Path
 from secrets import token_hex
 from typing import Annotated, Any
+from urllib.parse import parse_qs
 
 import jwt
 from bson import ObjectId
 from fastapi import Body, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import db, settings
@@ -35,6 +37,8 @@ SPATIAL_RETENTION_DAYS = 30
 TIME_DOMAIN_RETENTION_DAYS = 7
 SPATIAL_RETENTION_SECONDS = SPATIAL_RETENTION_DAYS * 24 * 60 * 60
 RAW_TIME_DOMAIN_CHUNK_BYTES = 8 * 1024 * 1024
+OPERATOR_COOKIE_NAME = "uabams_operator_session"
+OPERATOR_SESSION_HOURS = 12
 
 
 def utc_now() -> datetime:
@@ -180,6 +184,70 @@ async def store_time_domain_files(
     return stored_files
 
 
+def create_operator_session(username: str) -> str:
+    now = utc_now()
+    payload = {
+        "sub": username,
+        "role": "operator",
+        "iat": now,
+        "exp": now + timedelta(hours=OPERATOR_SESSION_HOURS),
+    }
+    return jwt.encode(payload, settings["jwt_secret"], algorithm=settings["jwt_algorithm"])
+
+
+def operator_session_payload(request: Request) -> dict[str, Any] | None:
+    token = request.cookies.get(OPERATOR_COOKIE_NAME)
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings["jwt_secret"], algorithms=[settings["jwt_algorithm"]])
+    except jwt.PyJWTError:
+        return None
+    if payload.get("role") != "operator":
+        return None
+    if payload.get("sub") != settings["operator_username"]:
+        return None
+    return payload
+
+
+def is_operator_authenticated(request: Request) -> bool:
+    return operator_session_payload(request) is not None
+
+
+def render_login_page(error: str = "") -> HTMLResponse:
+    error_html = f'<div class="login-error">{error}</div>' if error else ""
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UABAMS Login</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260701-login-auth">
+</head>
+<body class="login-body">
+  <main class="login-shell">
+    <section class="login-panel">
+      <div>
+        <h1>UABAMS</h1>
+        <p>Operator authentication</p>
+      </div>
+      {error_html}
+      <form method="post" action="/login" class="login-form">
+        <label>Username
+          <input name="username" type="text" autocomplete="username" required autofocus>
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="primary" type="submit">Login</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>"""
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
 def create_gateway_token(gateway_id: str, train_id: str | None = None) -> str:
     payload = {
         "sub": gateway_id,
@@ -250,11 +318,50 @@ async def startup() -> None:
 
 @app.get("/")
 async def root():
-    return {"message": "UABAMS Cloud Running", "dashboard": "/dashboard", "docs": "/docs"}
+    return {"message": "UABAMS Cloud Running", "dashboard": "/dashboard", "login": "/login", "docs": "/docs"}
+
+
+@app.get("/login")
+async def login_page(request: Request):
+    if is_operator_authenticated(request):
+        return RedirectResponse("/dashboard", status_code=303)
+    return render_login_page()
+
+
+@app.post("/login")
+async def login_submit(request: Request):
+    body = (await request.body()).decode("utf-8")
+    form = parse_qs(body, keep_blank_values=True)
+    username = form.get("username", [""])[0]
+    password = form.get("password", [""])[0]
+    username_ok = compare_digest(username, settings["operator_username"])
+    password_ok = compare_digest(password, settings["operator_password"])
+    if not (username_ok and password_ok):
+        return render_login_page("Invalid username or password")
+
+    response = RedirectResponse("/dashboard", status_code=303)
+    response.set_cookie(
+        OPERATOR_COOKIE_NAME,
+        create_operator_session(username),
+        max_age=OPERATOR_SESSION_HOURS * 60 * 60,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+    )
+    return response
+
+
+@app.get("/logout")
+async def logout():
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie(OPERATOR_COOKIE_NAME)
+    return response
 
 
 @app.get("/dashboard")
-async def dashboard_page():
+async def dashboard_page(request: Request):
+    if not is_operator_authenticated(request):
+        return RedirectResponse("/login", status_code=303)
     return FileResponse(Path("app/static/index.html"), headers={"Cache-Control": "no-store"})
 
 

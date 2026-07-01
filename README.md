@@ -35,6 +35,13 @@ Gateway upload, alert, and calibration APIs require:
 X-Api-Key
 ```
 
+Dashboard access requires operator login:
+
+```text
+OPERATOR_USERNAME
+OPERATOR_PASSWORD
+```
+
 Reset requires:
 
 ```text
@@ -82,6 +89,8 @@ GATEWAY_API_KEY_GW01
 GATEWAY_API_KEY_GW02
 JWT_SECRET
 ADMIN_RESET_KEY
+OPERATOR_USERNAME
+OPERATOR_PASSWORD
 ```
 
 Do not commit `.env`.

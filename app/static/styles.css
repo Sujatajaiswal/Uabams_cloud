@@ -52,6 +52,40 @@ h2 { font-size: 18px; letter-spacing: 0; }
 .status-pill.ok { background: #14532d; color: white; }
 
 .layout { padding: 18px 28px 32px; }
+
+.login-body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #172033 0%, #26364f 52%, #14532d 100%);
+}
+.login-shell {
+  width: min(420px, calc(100vw - 32px));
+}
+.login-panel {
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.24);
+}
+.login-panel h1 { color: var(--black); }
+.login-panel p { margin-top: 4px; color: var(--muted); }
+.login-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+.login-form button { width: 100%; }
+.login-error {
+  margin-top: 18px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-weight: 700;
+}
 .toolbar {
   display: grid;
   grid-template-columns: minmax(130px, 160px) minmax(230px, 280px) minmax(280px, 1fr) 112px;
