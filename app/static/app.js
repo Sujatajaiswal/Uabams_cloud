@@ -44,7 +44,7 @@ function gatewayLabel(gatewayId) {
 }
 
 function trainNoValue() {
-  return $('trainNo')?.value.trim() || '019456';
+  return $('trainNo')?.value.trim() || '';
 }
 
 function gatewayApiKey(gatewayId) {
@@ -217,6 +217,14 @@ function syncCleanupGateway() {
   const cleanup = $('cleanupGateway');
   if (cleanup) cleanup.value = selected;
 }
+function syncCalibrationGateway() {
+  const visibleIds = visibleGatewayIds();
+  document.querySelectorAll('.calibration-card').forEach((card) => {
+    card.classList.toggle('hidden', !visibleIds.includes(card.dataset.gateway));
+  });
+  setText('loadAllCalibrationBtn', selectedGatewayValue() ? 'Load Selected' : 'Load All');
+}
+
 function renderDashboard(data) {
   state.dashboard = data;
   updateGatewaySelector(data);
@@ -229,22 +237,23 @@ function renderDashboard(data) {
   const activeSession = data.activeSession;
   const rmsPoints = data.rmsPoints || [];
   const mapAlerts = data.mapAlerts || alerts.map(dashboardAlertToMapPoint);
+  const allGatewayIds = dashboardGatewayIds;
   const viewGatewayIds = visibleGatewayIds();
-  const viewGateways = gateways.filter((gw) => viewGatewayIds.includes(gw.gatewayId));
+  const allGateways = gateways.filter((gw) => allGatewayIds.includes(gw.gatewayId));
   const viewAlerts = alerts.filter((alert) => gatewayMatches(alert, selectedGateway));
   const viewArchives = archives.filter((archive) => gatewayMatches(archive, selectedGateway));
   const viewRmsPoints = rmsPoints.filter((point) => gatewayMatches(point, selectedGateway));
   const viewMapAlerts = mapAlerts.filter((point) => gatewayMatches(point, selectedGateway));
-  const onlineCount = viewGatewayIds.filter((gatewayId) => gateways.find((gw) => gw.gatewayId === gatewayId)?.online).length;
-  const criticalCount = viewAlerts.filter((alert) => alert.alert === 'RED').length;
+  const onlineCount = allGatewayIds.filter((gatewayId) => gateways.find((gw) => gw.gatewayId === gatewayId)?.online).length;
+  const criticalCount = alerts.filter((alert) => alert.alert === 'RED').length;
   setText('summaryTrain', train.trainNo || '-');
   setText('summaryStatus', train.status || '-');
-  setText('summaryGateways', `${onlineCount}/${viewGatewayIds.length || 2}`);
-  setText('summaryLastData', formatDate(lastDataTime(train, viewGateways, viewAlerts, viewArchives)));
-  setText('summaryArchives', viewArchives.length);
+  setText('summaryGateways', `${onlineCount}/${allGatewayIds.length || 0}`);
+  setText('summaryLastData', formatDate(lastDataTime(train, allGateways, alerts, archives)));
+  setText('summaryArchives', archives.length);
   setText('summaryCritical', criticalCount);
 
-  setHtml('gatewayList', viewGatewayIds.map((gatewayId) => {
+  setHtml('gatewayList', allGatewayIds.map((gatewayId) => {
     const gw = gateways.find((item) => item.gatewayId === gatewayId) || { gatewayId, trainId: train.trainNo, online: false };
     const latest = latestAlertFor(alerts, gatewayId);
     const alertStatus = normalizeAlert(latest?.alert);
@@ -267,9 +276,9 @@ function renderDashboard(data) {
     `;
   }).join(''));
 
-  setGatewayDetailVisible(Boolean(selectedGateway));
-  if (selectedGateway) loadGatewayDetails();
+  setGatewayDetailVisible(false);
   syncCleanupGateway();
+  syncCalibrationGateway();
   renderAlertSummary(viewAlerts);
   renderAlerts(viewAlerts);
   renderArchives(viewArchives);
@@ -595,7 +604,7 @@ async function loadCalibration(gatewayId) {
 }
 
 async function loadAllCalibration() {
-  for (const gatewayId of gatewayIds) {
+  for (const gatewayId of visibleGatewayIds()) {
     await loadCalibration(gatewayId);
   }
 }
@@ -648,7 +657,11 @@ async function saveCalibration(gatewayId) {
 
 async function loadDashboard() {
   const trainNo = trainNoValue();
-  if (!trainNo) return;
+  if (!trainNo) {
+    setStatus('Enter train number', 'error');
+    setHtml('gatewayList', '<p class="empty-state">Enter a train number and select Search Train.</p>');
+    return;
+  }
   setStatus('Loading');
   try {
     const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/dashboard`);
@@ -708,7 +721,7 @@ function boot() {
   $('resetBtn')?.addEventListener('click', resetSession);
   $('cleanupBtn')?.addEventListener('click', cleanupData);
   document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tab)));
-  loadDashboard();
+  setHtml('gatewayList', '<p class="empty-state">Enter a train number and select Search Train.</p>');
 }
 
 boot();

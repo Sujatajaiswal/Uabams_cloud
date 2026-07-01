@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UABAMS Dashboard</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/static/styles.css?v=20260701-login-auth">
+  <link rel="stylesheet" href="/static/styles.css?v=20260701-dashboard-filter">
 </head>
 <body>
   <header class="app-header">
@@ -24,7 +24,7 @@
     <section class="toolbar gateway-toolbar" aria-label="Train and gateway selector">
       <label>
         Search Train No
-        <input id="trainNo" type="text" value="019456" placeholder="Enter train number">
+        <input id="trainNo" type="text" value="" placeholder="Enter train number" autocomplete="off">
       </label>
       <label>
         Gateway
@@ -86,7 +86,7 @@
     <section id="calibration" class="panel">
       <div class="section-head">
         <h2>Gateway Calibration</h2>
-        <button id="loadAllCalibrationBtn">Load Both</button>
+        <button id="loadAllCalibrationBtn">Load All</button>
       </div>
       <div class="calibration-note">
         Calibration is saved only after the train reaches the destination. If the train stops in between, keep calibration pending and do not send it to the gateway.
@@ -173,6 +173,6 @@
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=20260701-login-auth"></script>
+  <script src="/static/app.js?v=20260701-dashboard-filter"></script>
 </body>
 </html>
