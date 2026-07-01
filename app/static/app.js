@@ -710,6 +710,8 @@ function selectTab(tabId) {
 function boot() {
   initializeMaps();
   buildCalibrationCards();
+  updateGatewaySelector({});
+  setStatus('Live', 'ok');
   $('searchBtn')?.addEventListener('click', loadDashboard);
   $('dashboardGateway')?.addEventListener('change', () => {
     if (state.dashboard) renderDashboard(state.dashboard);
