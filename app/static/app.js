@@ -148,6 +148,31 @@ function archiveCountFor(archives, gatewayId) {
   return archives.filter((archive) => archive.gatewayId === gatewayId).length;
 }
 
+function renderGatewayCards(gatewayIdsToShow, gateways = [], train = {}, alerts = [], archives = []) {
+  setHtml('gatewayList', gatewayIdsToShow.map((gatewayId) => {
+    const gw = gateways.find((item) => item.gatewayId === gatewayId) || { gatewayId, trainId: train.trainNo, online: false };
+    const latest = latestAlertFor(alerts, gatewayId);
+    const alertStatus = normalizeAlert(latest?.alert);
+    const statusClass = gw.online ? 'online-box' : 'offline-box';
+    return `
+      <article class="gateway-card ${statusClass}">
+        <div class="gateway-title">
+          <span>${gatewayLabel(gatewayId)} - ${gatewayId}</span>
+          <span class="badge ${gw.online ? 'online' : 'offline'}">${gw.online ? 'Online' : 'Offline'}</span>
+        </div>
+        <div class="gateway-kpis">
+          <div><span>Train</span><strong>${gw.trainId || train.trainNo || '-'}</strong></div>
+          <div><span>Latest Peak</span><strong>${latest ? `${latest.peakValueG} G` : '-'}</strong></div>
+          <div class="alert-kpi ${latest ? alertStatus : ''}"><span>Alert</span><strong>${latest ? alertStatus : '-'}</strong></div>
+          <div><span>Archives</span><strong>${archiveCountFor(archives, gatewayId)}</strong></div>
+        </div>
+        <div>Last heartbeat: ${formatDate(gw.lastHeartbeat)}</div>
+        <div>Last alert location: ${latest ? `${latest.latitude}, ${latest.longitude}` : '-'}</div>
+      </article>
+    `;
+  }).join(''));
+}
+
 function initializeMaps() {
   if (!window.L) {
     gatewayIds.forEach((id) => {
@@ -659,7 +684,7 @@ async function loadDashboard() {
   const trainNo = trainNoValue();
   if (!trainNo) {
     setStatus('Enter train number', 'error');
-    setHtml('gatewayList', '<p class="empty-state">Enter a train number and select Search Train.</p>');
+    renderGatewayCards(dashboardGatewayIds);
     return;
   }
   setStatus('Loading');
@@ -723,7 +748,7 @@ function boot() {
   $('resetBtn')?.addEventListener('click', resetSession);
   $('cleanupBtn')?.addEventListener('click', cleanupData);
   document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tab)));
-  setHtml('gatewayList', '<p class="empty-state">Enter a train number and select Search Train.</p>');
+  renderGatewayCards(dashboardGatewayIds);
 }
 
 boot();
