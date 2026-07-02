@@ -24,7 +24,8 @@
     <section class="toolbar gateway-toolbar" aria-label="Train and gateway selector">
       <label>
         Search Train No
-        <input id="trainNo" type="text" value="" placeholder="Enter train number" autocomplete="off">
+        <input id="trainNo" type="text" value="" placeholder="Enter train number" autocomplete="off" list="recentTrainNos">
+        <datalist id="recentTrainNos"></datalist>
       </label>
       <label>
         Gateway

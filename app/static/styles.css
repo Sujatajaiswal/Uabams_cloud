@@ -171,7 +171,7 @@ button { cursor: pointer; font-weight: 700; }
 .gateway-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 800; }
 .badge { padding: 4px 8px; border-radius: 999px; font-size: 12px; color: white; background: var(--muted); white-space: nowrap; }
 .badge.online, .badge.GREEN { background: var(--green); }
-.badge.offline { background: #697386; }
+.badge.offline, .badge.RED { background: var(--red); }
 .badge.RED { background: var(--red); }
 .badge.YELLOW { background: var(--yellow); }
 
@@ -298,7 +298,7 @@ code { font-family: Consolas, monospace; font-size: 13px; }
 
 .two-col { grid-template-columns: repeat(2, minmax(320px, 1fr)); }
 .gateway-card.online-box { border-color: rgba(21, 148, 95, 0.55); box-shadow: inset 5px 0 0 var(--green); }
-.gateway-card.offline-box { border-color: rgba(194, 65, 52, 0.55); box-shadow: inset 5px 0 0 var(--red); }
+.gateway-card.offline-box { border-color: rgba(194, 65, 52, 0.72); background: #fff7f6; box-shadow: inset 5px 0 0 var(--red); }
 .gateway-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(90px, 1fr));

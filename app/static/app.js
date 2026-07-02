@@ -4,6 +4,7 @@ const gatewayIds = defaultGatewayIds;
 let dashboardGatewayIds = [...defaultGatewayIds];
 const maps = {};
 const layers = {};
+const recentTrainStorageKey = 'uabams_recent_train_numbers';
 
 const $ = (id) => document.getElementById(id);
 
@@ -45,6 +46,41 @@ function gatewayLabel(gatewayId) {
 
 function trainNoValue() {
   return $('trainNo')?.value.trim() || '';
+}
+
+
+function recentTrainNumbers() {
+  try {
+    const values = JSON.parse(localStorage.getItem(recentTrainStorageKey) || '[]');
+    return Array.isArray(values) ? values.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderRecentTrainNumbers() {
+  const list = $('recentTrainNos');
+  const input = $('trainNo');
+
+  if (!list || !input) return;
+
+  const trains = recentTrainNumbers();
+
+  list.innerHTML = trains
+    .map((trainNo) => `<option value="${escapeHtml(trainNo)}"></option>`)
+    .join('');
+
+  if (trains.length > 0) {
+    input.value = trains[0];
+  }
+}
+
+function rememberTrainNumber(trainNo) {
+  const cleanTrainNo = String(trainNo || '').trim();
+  if (!cleanTrainNo) return;
+
+  localStorage.setItem(recentTrainStorageKey, JSON.stringify([cleanTrainNo]));
+  renderRecentTrainNumbers();
 }
 
 function gatewayApiKey(gatewayId) {
@@ -699,6 +735,7 @@ async function loadDashboard() {
     state.rmsPoints = rmsPoints;
     state.mapAlerts = mapAlerts;
     renderDashboard(data);
+    rememberTrainNumber(data.train?.trainNo || trainNo);
     setStatus('Live', 'ok');
   } catch (error) {
     setStatus('Error', 'error');
@@ -736,6 +773,7 @@ function boot() {
   initializeMaps();
   buildCalibrationCards();
   updateGatewaySelector({});
+  renderRecentTrainNumbers();
   setStatus('Live', 'ok');
   $('searchBtn')?.addEventListener('click', loadDashboard);
   $('dashboardGateway')?.addEventListener('change', () => {
