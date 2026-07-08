@@ -4,6 +4,9 @@ const gatewayIds = defaultGatewayIds;
 let dashboardGatewayIds = [...defaultGatewayIds];
 const maps = {};
 const layers = {};
+const trainMarkers = {};
+let autoRefreshTimer = null;
+let lastLoadedTrainNo = "";
 const recentTrainStorageKey = 'uabams_recent_train_numbers';
 
 const $ = (id) => document.getElementById(id);
@@ -26,6 +29,37 @@ function setClass(id, value) {
 function setStatus(text, mode = '') {
   setText('apiStatus', text);
   setClass('apiStatus', `status-pill ${mode}`.trim());
+}
+
+async function logClientEvent(action, details = {}) {
+  try {
+    await fetch('/api/v1/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        page: location.pathname + location.hash,
+        action,
+        message: details.message || null,
+        errorMessage: details.errorMessage || null,
+        latitude: details.latitude ?? null,
+        longitude: details.longitude ?? null,
+      }),
+    });
+  } catch {
+    // Logging must never break the dashboard.
+  }
+}
+
+function logBrowserLocation(action) {
+  if (!navigator.geolocation) {
+    logClientEvent(action);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (position) => logClientEvent(action, { latitude: position.coords.latitude, longitude: position.coords.longitude }),
+    () => logClientEvent(action),
+    { maximumAge: 300000, timeout: 3000 }
+  );
 }
 
 function selectedGatewayValue() {
@@ -142,6 +176,7 @@ async function requestJson(url, options = {}) {
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!response.ok) {
     const detail = data && data.detail ? data.detail : response.statusText;
+    logClientEvent('fetch_error', { message: url, errorMessage: `${response.status} ${detail}` });
     throw new Error(`${response.status} ${detail}`);
   }
   return data;
@@ -230,6 +265,12 @@ function initializeMaps() {
     }).addTo(maps[gatewayId]);
     layers[gatewayId] = L.layerGroup().addTo(maps[gatewayId]);
   });
+}
+
+function refreshVisibleMaps(delay = 120) {
+  setTimeout(() => {
+    visibleGatewayIds().forEach((gatewayId) => maps[gatewayId]?.invalidateSize());
+  }, delay);
 }
 
 function dashboardAlertToMapPoint(alert) {
@@ -381,6 +422,35 @@ function pointInRouteBounds(point, routePoints, padding = 0.035) {
   return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
 }
 
+function routeBearing(previous, current) {
+  const lat1 = Number(previous.lat) * Math.PI / 180;
+  const lat2 = Number(current.lat) * Math.PI / 180;
+  const deltaLon = (Number(current.lon) - Number(previous.lon)) * Math.PI / 180;
+  const y = Math.sin(deltaLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function addDirectionArrow(layer, previous, current, severity) {
+  const midLat = (Number(previous.lat) + Number(current.lat)) / 2;
+  const midLon = (Number(previous.lon) + Number(current.lon)) / 2;
+  const bearing = routeBearing(previous, current);
+  L.marker([midLat, midLon], {
+    interactive: false,
+    icon: L.divIcon({
+      className: 'direction-arrow',
+      html: `<span style="transform: rotate(${bearing}deg); color: ${alertColor(severity)}">&#9650;</span>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+    }),
+  }).addTo(layer);
+}
+
+function trainIconHtml(bearing) {
+  const rotation = Number.isFinite(Number(bearing)) ? Number(bearing) : 0;
+  return `<div class="train-position-icon" style="transform: rotate(${rotation}deg)">&#9650;</div>`;
+}
+
 function drawColoredRoute(layer, points) {
   if (!layer || points.length < 2) return;
   const latLngs = points.map((point) => [Number(point.lat), Number(point.lon)]);
@@ -408,6 +478,7 @@ function drawColoredRoute(layer, points) {
         smoothFactor: 1.2,
       }
     ).addTo(layer);
+    if (i % 8 === 0 || severity === 'RED') addDirectionArrow(layer, previous, current, severity);
   }
 }
 
@@ -471,7 +542,73 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
       map.fitBounds(bounds.pad(selectedGateway ? 0.3 : 0.2), { maxZoom: 16 });
     }
   });
+  refreshVisibleMaps();
 }
+function clearHiddenTrainMarkers(visibleIds) {
+  Object.entries(trainMarkers).forEach(([gatewayId, marker]) => {
+    if (!visibleIds.includes(gatewayId)) {
+      marker.remove();
+      delete trainMarkers[gatewayId];
+    }
+  });
+}
+
+async function renderGatewayTrainPosition(trainNo, gatewayId) {
+  try {
+    const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/position?gateway_id=${encodeURIComponent(gatewayId)}`);
+    const point = data.position;
+    if (!point || !data.gatewayId || !maps[data.gatewayId]) return;
+    const map = maps[data.gatewayId];
+    const oldMarker = trainMarkers[data.gatewayId];
+    if (oldMarker) oldMarker.remove();
+    trainMarkers[data.gatewayId] = L.marker([point.latitude, point.longitude], {
+      icon: L.divIcon({
+        className: '',
+        html: trainIconHtml(point.bearing),
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+      }),
+      zIndexOffset: 900,
+    }).addTo(map).bindPopup(`Current train position<br>Gateway: ${data.gatewayId}<br>Speed: ${point.speedKmph ?? '-'} kmph<br>Position: ${point.positionMm ?? '-'} mm`);
+  } catch (error) {
+    logClientEvent('position_error', { message: gatewayId, errorMessage: error.message });
+  }
+}
+
+async function renderTrainPosition(trainNo) {
+  if (!trainNo || !window.L) return;
+  const visibleIds = visibleGatewayIds();
+  clearHiddenTrainMarkers(visibleIds);
+  await Promise.all(visibleIds.map((gatewayId) => renderGatewayTrainPosition(trainNo, gatewayId)));
+}
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(() => {
+    if (lastLoadedTrainNo) loadDashboard({ silent: true });
+  }, 8000);
+}
+
+async function loadLogs() {
+  try {
+    const data = await requestJson('/api/v1/logs?limit=100');
+    const rows = data.logs || [];
+    setHtml('logsTable', rows.length ? rows.map((log) => `
+      <tr>
+        <td>${formatDate(log.createdAt)}</td>
+        <td>${escapeHtml(log.username || '-')}</td>
+        <td>${escapeHtml(log.page || '-')}</td>
+        <td>${escapeHtml(log.action || '-')}</td>
+        <td>${escapeHtml(log.errorMessage || '-')}</td>
+        <td>${escapeHtml(log.ipAddress || '-')}</td>
+        <td>${log.latitude && log.longitude ? `${log.latitude}, ${log.longitude}` : '-'}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="7">No logs found.</td></tr>');
+  } catch (error) {
+    setHtml('logsTable', `<tr><td colspan="7" class="error-text">${escapeHtml(error.message)}</td></tr>`);
+  }
+}
+
 function renderArchives(archives) {
   setHtml('archiveTable', archives.length ? archives.map((archive) => `
     <tr>
@@ -525,7 +662,7 @@ async function loadGatewayDetails() {
   const gatewayId = selectedGatewayValue();
   if (!gatewayId) { setGatewayDetailVisible(false); return; }
   try {
-    setStatus('Loading');
+    if (!options.silent) setStatus('Loading');
     const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/gateways/${encodeURIComponent(gatewayId)}/details`);
     renderGatewayDetails(data);
     setStatus('Live', 'ok');
@@ -716,14 +853,14 @@ async function saveCalibration(gatewayId) {
   }
 }
 
-async function loadDashboard() {
+async function loadDashboard(options = {}) {
   const trainNo = trainNoValue();
   if (!trainNo) {
     setStatus('Enter train number', 'error');
     renderGatewayCards(dashboardGatewayIds);
     return;
   }
-  setStatus('Loading');
+  if (!options.silent) setStatus('Loading');
   try {
     const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/dashboard`);
     const [rmsPoints, mapAlerts] = await Promise.all([
@@ -735,7 +872,10 @@ async function loadDashboard() {
     state.rmsPoints = rmsPoints;
     state.mapAlerts = mapAlerts;
     renderDashboard(data);
+    await renderTrainPosition(trainNo);
     rememberTrainNumber(data.train?.trainNo || trainNo);
+    lastLoadedTrainNo = trainNo;
+    startAutoRefresh();
     setStatus('Live', 'ok');
   } catch (error) {
     setStatus('Error', 'error');
@@ -767,6 +907,7 @@ function selectTab(tabId) {
   if (tabId === 'alerts') {
     setTimeout(() => gatewayIds.forEach((gatewayId) => maps[gatewayId]?.invalidateSize()), 120);
   }
+  if (tabId === 'logs') loadLogs();
 }
 
 function boot() {
@@ -777,7 +918,10 @@ function boot() {
   setStatus('Live', 'ok');
   $('searchBtn')?.addEventListener('click', loadDashboard);
   $('dashboardGateway')?.addEventListener('change', () => {
+    logClientEvent('gateway_filter_change', { message: selectedGatewayValue() || 'All Gateways' });
     if (state.dashboard) renderDashboard(state.dashboard);
+    refreshVisibleMaps(180);
+    if (lastLoadedTrainNo) renderTrainPosition(lastLoadedTrainNo);
   });
   $('trainNo')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') loadDashboard();
@@ -785,8 +929,21 @@ function boot() {
   $('loadAllCalibrationBtn')?.addEventListener('click', loadAllCalibration);
   $('resetBtn')?.addEventListener('click', resetSession);
   $('cleanupBtn')?.addEventListener('click', cleanupData);
-  document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tab)));
+  $('loadLogsBtn')?.addEventListener('click', loadLogs);
+  document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => {
+    logClientEvent('tab_change', { message: button.dataset.tab });
+    selectTab(button.dataset.tab);
+  }));
   renderGatewayCards(dashboardGatewayIds);
+  logBrowserLocation('dashboard_loaded');
 }
+
+window.addEventListener('error', (event) => {
+  logClientEvent('javascript_error', { errorMessage: `${event.message} at ${event.filename}:${event.lineno}` });
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  logClientEvent('promise_error', { errorMessage: String(event.reason?.message || event.reason || 'Unhandled promise rejection') });
+});
 
 boot();

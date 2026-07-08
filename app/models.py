@@ -59,6 +59,15 @@ class TargetedResetRequest(BaseModel):
     reason: str | None = None
 
 
+class ActivityLogRequest(BaseModel):
+    page: str
+    action: str = "page_view"
+    message: str | None = None
+    errorMessage: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
 class GatewayStatus(BaseModel):
     gatewayId: str
     online: bool

@@ -23,68 +23,308 @@ body {
 }
 
 .app-header {
-  min-height: 86px;
-  padding: 18px 28px;
+  position: relative;
+  height: 90px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  background: var(--black);
+  background: #1d70b8; /* Royal Blue */
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   color: white;
 }
 
-h1, h2, p { margin: 0; }
-h1 { font-size: 30px; font-weight: 700; letter-spacing: 0; }
-h2 { font-size: 18px; letter-spacing: 0; }
-.app-header p { color: #b7c6d8; margin-top: 4px; }
-.header-actions { display: flex; align-items: center; gap: 12px; }
-.header-actions a { color: #dbeafe; text-decoration: none; font-weight: 700; }
-
-.status-pill {
-  min-width: 96px;
-  text-align: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.14);
-  color: #dce8f5;
+/* White brand box on the left */
+.brand-box {
+  position: relative;
+  background: white;
+  height: 100%;
+  padding: 0 42px 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
+  min-width: 250px;
 }
-.status-pill.error { background: #7f1d1d; color: white; }
-.status-pill.ok { background: #14532d; color: white; }
+
+.header-logo {
+  height: 52px;
+  width: auto;
+}
+
+/* Circular emblem overlapping the transition */
+.emblem-container {
+  position: absolute;
+  left: 232px; /* Positions emblem right at the slanted boundary */
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  background: white;
+  border-radius: 50%;
+  padding: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+}
+
+.emblem-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Nav content occupying the rest of the header */
+.nav-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px 0 54px; /* Left padding gives breathing room for emblem */
+  height: 100%;
+}
+
+.header-title-area {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.header-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.header-subtitle {
+  font-size: 13px;
+  color: #dbeafe;
+  margin: 2px 0 0 0;
+  font-weight: 500;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #f0fdf4;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.nav-icon {
+  stroke-width: 2px;
+}
+
+/* Modernized status pill */
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.status-pill.ok {
+  background: #15803d;
+  color: white;
+  box-shadow: 0 0 10px rgba(22, 163, 74, 0.4);
+}
+
+.status-pill.error {
+  background: #b91c1c;
+  color: white;
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.4);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #4ade80;
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse 1.8s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(74, 222, 128, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
+}
+
+h1, h2, p { margin: 0; }
+h2 { font-size: 18px; letter-spacing: 0; }
 
 .layout { padding: 18px 28px 32px; }
 
 .login-body {
+  margin: 0;
+  height: 100%;
+  font-family: "Segoe UI", sans-serif;
+  background: radial-gradient(
+    circle at center,
+    #edf2f7 0%,
+    #d9e4f1 55%,
+    #c6d9ee 100%
+  );
+}
+
+.login-page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #172033 0%, #26364f 52%, #14532d 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
 }
-.login-shell {
-  width: min(420px, calc(100vw - 32px));
+
+.login-container {
+  margin-top: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-.login-panel {
-  padding: 28px;
-  border: 1px solid rgba(255,255,255,0.18);
+
+.top-logo-container {
+  margin-bottom: 35px;
+}
+
+.railman-logo {
+  width: 220px;
+  height: auto;
+}
+
+.login-form-container {
+  width: 360px;
+}
+
+.input-group {
+  margin-bottom: 22px;
+  position: relative;
+}
+.input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #777;
+  font-size: 16px;
+}
+
+.input-group input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 45px 14px 40px;
+  border: none;
+  border-bottom: 1px solid #9da8b5;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 14px;
+  outline: none;
+}
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.login-btn {
+  width: 140px;
+  height: 38px;
+  display: block;
+  margin: 0 auto;
+  border: none;
+  border-radius: 4px;
+  background: #2f77c4;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.login-btn:hover {
+  background: #255fa1;
+}
+
+.footer-branding {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.apna-logo {
+  width: 340px;
+  height: auto;
+  margin-bottom: 15px;
+}
+
+.footer-links {
+  color: #555;
+  font-size: 13px;
+}
+
+.alert {
   border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 24px 70px rgba(0,0,0,0.24);
+  padding: 14px;
+  margin-bottom: 18px;
+  font-size: 14px;
 }
-.login-panel h1 { color: var(--black); }
-.login-panel p { margin-top: 4px; color: var(--muted); }
-.login-form {
-  display: grid;
-  gap: 14px;
-  margin-top: 22px;
+
+.alert-error {
+  background: #fff2f2;
+  border-left: 4px solid #dc3545;
+  color: #8b1e1e;
 }
-.login-form button { width: 100%; }
-.login-error {
-  margin-top: 18px;
-  padding: 10px 12px;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: #991b1b;
-  font-weight: 700;
+
+.alert-warning {
+  background: #fff8e5;
+  border-left: 4px solid #f0ad4e;
+  color: #8a6d3b;
+}
+
+.alert-success {
+  background: #edf9f0;
+  border-left: 4px solid #28a745;
+  color: #155724;
 }
 .toolbar {
   display: grid;
@@ -257,10 +497,31 @@ code { font-family: Consolas, monospace; font-size: 13px; }
   .summary-grid, .calibration-form { grid-template-columns: 1fr; }
   .form-action { grid-column: auto; }
   .tabs { overflow-x: auto; }
-  .tab { min-width: 112px; }
-  .app-header { align-items: flex-start; flex-direction: column; }
-  .header-actions { width: 100%; justify-content: space-between; }
-  .reset-zone { align-items: stretch; flex-direction: column; }
+  .app-header {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .brand-box {
+    clip-path: none;
+    padding: 12px;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+  .emblem-container {
+    display: none;
+  }
+  .nav-content {
+    padding: 12px 24px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
 }
 
 .map-popup {
@@ -497,4 +758,27 @@ code { font-family: Consolas, monospace; font-size: 13px; }
 }
 @media (max-width: 760px) {
   .gateway-toolbar, .reset-actions { grid-template-columns: 1fr; }
+}
+
+.direction-arrow span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  font-size: 16px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  transform-origin: center;
+}
+.train-position-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 17px;
+  box-shadow: 0 6px 16px rgba(15,23,42,0.35);
+  transform-origin: center;
 }

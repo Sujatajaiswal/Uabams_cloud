@@ -1,0 +1,27 @@
+services:
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  uabams-cloud:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      MONGODB_URL: mongodb://mongodb:27017/uabams
+      DATABASE_NAME: uabams
+      JWT_SECRET: local-docker-change-me
+      JWT_ALGORITHM: HS256
+      GATEWAY_API_KEY_GW01: d72e87a685293d12ecc14427572f1895c86b3e3a35ae248458693645c32b0ffb
+      GATEWAY_API_KEY_GW02: a305f8c3d73dfdc1653073e316a0737e9c5aa4b5ebb56e4afbe2f05faee5f466
+      ADMIN_RESET_KEY: local-admin-key
+      OPERATOR_USERNAME: admin
+      OPERATOR_PASSWORD: admin123
+    depends_on:
+      - mongodb
+
+volumes:
+  mongo_data:

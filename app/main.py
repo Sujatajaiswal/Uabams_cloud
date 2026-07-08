@@ -12,12 +12,14 @@ from bson import ObjectId
 from fastapi import Body, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import db, settings
 from app.middleware.auth import GatewayAuthMiddleware
 from app.models import (
     AlertRequest,
     AuthRequest,
+    ActivityLogRequest,
     CalibrationUpdateRequest,
     HandshakeRequest,
     HeartbeatRequest,
@@ -30,7 +32,6 @@ app = FastAPI(
     title="UABAMS Cloud API",
     version="0.2.0",
 )
-app.add_middleware(GatewayAuthMiddleware)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 SPATIAL_RETENTION_DAYS = 30
@@ -39,6 +40,13 @@ SPATIAL_RETENTION_SECONDS = SPATIAL_RETENTION_DAYS * 24 * 60 * 60
 RAW_TIME_DOMAIN_CHUNK_BYTES = 8 * 1024 * 1024
 OPERATOR_COOKIE_NAME = "uabams_operator_session"
 OPERATOR_SESSION_HOURS = 12
+
+
+def client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.client.host if request.client else ""
 
 
 def utc_now() -> datetime:
@@ -214,9 +222,38 @@ def is_operator_authenticated(request: Request) -> bool:
     return operator_session_payload(request) is not None
 
 
+def operator_username(request: Request) -> str | None:
+    payload = operator_session_payload(request)
+    return payload.get("sub") if payload else None
+
+
+class ActivityLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith(("/static", "/docs", "/openapi.json", "/api/v1/logs")):
+            return response
+        username = operator_username(request)
+        if username:
+            await db.activity_logs.insert_one({
+                "username": username,
+                "page": path,
+                "action": f"{request.method} {path}",
+                "statusCode": response.status_code,
+                "ipAddress": client_ip(request),
+                "userAgent": request.headers.get("user-agent", ""),
+                "createdAt": utc_now(),
+            })
+        return response
+
+
+app.add_middleware(ActivityLogMiddleware)
+app.add_middleware(GatewayAuthMiddleware)
+
+
 def render_login_page(error: str = "") -> HTMLResponse:
-    error_html = f'<div class="login-error">{error}</div>' if error else ""
-    html = f"""<!doctype html>
+    error_html = f'<div class="alert alert-error">{error}</div>' if error else ""
+    html = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -225,26 +262,75 @@ def render_login_page(error: str = "") -> HTMLResponse:
   <link rel="stylesheet" href="/static/styles.css?v=20260701-login-auth">
 </head>
 <body class="login-body">
-  <main class="login-shell">
-    <section class="login-panel">
-      <div>
-        <h1>UABAMS</h1>
-        <p>Operator authentication</p>
+  <div class="login-page">
+    <div class="login-container">
+      <div class="top-logo-container">
+        <img src="/static/railman-logo.png" class="railman-logo" alt="RailMan Logo">
       </div>
-      {error_html}
-      <form method="post" action="/login" class="login-form">
-        <label>Username
-          <input name="username" type="text" autocomplete="username" required autofocus>
-        </label>
-        <label>Password
-          <input name="password" type="password" autocomplete="current-password" required>
-        </label>
-        <button class="primary" type="submit">Login</button>
-      </form>
-    </section>
-  </main>
+      <div class="login-form-container">
+        {error_html}
+        <form method="post" action="/login">
+          <div class="input-group">
+            <span class="input-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </span>
+            <input name="username" type="text" autocomplete="username" placeholder="Username or Email" required autofocus>
+          </div>
+          <div class="input-group">
+            <span class="input-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </span>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+            <button type="button" class="password-toggle" id="toggle-password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="eye-icon">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <button class="login-btn" type="submit">Login</button>
+        </form>
+      </div>
+    </div>
+    <div class="footer-branding">
+      <img src="/static/apna-logo.png" class="apna-logo" alt="Apna Logo">
+      <div class="footer-links">&copy; 2026 Privacy Policy | Copyright Policy</div>
+    </div>
+  </div>
+
+  <script>
+    const togglePassword = document.querySelector('#toggle-password');
+    const password = document.querySelector('#password');
+    
+    togglePassword.addEventListener('click', function () {
+      const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+      password.setAttribute('type', type);
+      
+      if (type === 'password') {
+        this.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="eye-icon">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        `;
+      } else {
+        this.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="eye-icon">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          </svg>
+        `;
+      }
+    });
+  </script>
 </body>
-</html>"""
+</html>""".replace("{error_html}", error_html)
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
@@ -314,6 +400,8 @@ async def startup() -> None:
     await db.time_domain_chunks.create_index([("fileId", 1), ("chunkIndex", 1)], unique=True)
     await db.sessions.create_index([("trainNo", 1), ("status", 1)])
     await db.reset_events.create_index([("trainNo", 1), ("createdAt", -1)])
+    await db.activity_logs.create_index([("username", 1), ("createdAt", -1)])
+    await db.activity_logs.create_index([("page", 1), ("createdAt", -1)])
 
 
 @app.get("/")
@@ -363,6 +451,41 @@ async def dashboard_page(request: Request):
     if not is_operator_authenticated(request):
         return RedirectResponse("/login", status_code=303)
     return FileResponse(Path("app/static/index.html"), headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/v1/logs")
+async def create_activity_log(data: ActivityLogRequest, request: Request):
+    username = operator_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Login required")
+    document = {
+        "username": username,
+        "page": data.page,
+        "action": data.action,
+        "message": data.message,
+        "errorMessage": data.errorMessage,
+        "latitude": data.latitude,
+        "longitude": data.longitude,
+        "ipAddress": client_ip(request),
+        "userAgent": request.headers.get("user-agent", ""),
+        "createdAt": utc_now(),
+    }
+    await db.activity_logs.insert_one(document)
+    return {"status": "success", "log": serialize(document)}
+
+
+@app.get("/api/v1/logs")
+async def list_activity_logs(request: Request, username: str | None = None, page: str | None = None, limit: int = 100):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+    query: dict[str, Any] = {}
+    if username:
+        query["username"] = username
+    if page:
+        query["page"] = page
+    capped_limit = min(max(limit, 1), 500)
+    logs = await db.activity_logs.find(query).sort("createdAt", -1).limit(capped_limit).to_list(length=capped_limit)
+    return {"logs": serialize(logs)}
 
 
 @app.post("/api/v1/handshake")
@@ -869,6 +992,49 @@ async def train_archives(train_no: str):
     return {"trainNo": train_no, "archives": serialize(archives)}
 
 
+@app.get("/api/v1/trains/{train_no}/position")
+async def train_position(train_no: str, gateway_id: str | None = None):
+    query: dict[str, Any] = {
+        "trainId": train_no,
+        "gpsValid": True,
+        "latitude": {"$nin": [None, 0]},
+        "longitude": {"$nin": [None, 0]},
+    }
+    if gateway_id:
+        query["gatewayId"] = gateway_id
+
+    latest = await db.rms_records.find_one(query, sort=[("createdAt", -1), ("positionMm", -1)])
+    if not latest:
+        return {"trainNo": train_no, "gatewayId": gateway_id, "position": None}
+
+    previous_query = dict(query)
+    previous_query["gatewayId"] = latest.get("gatewayId")
+    previous_query["positionMm"] = {"$lt": latest.get("positionMm", 0)}
+    previous = await db.rms_records.find_one(previous_query, sort=[("positionMm", -1)])
+    bearing = None
+    if previous:
+        from math import atan2, cos, degrees, radians, sin
+        lat1 = radians(float(previous.get("latitude", 0)))
+        lat2 = radians(float(latest.get("latitude", 0)))
+        delta_lon = radians(float(latest.get("longitude", 0)) - float(previous.get("longitude", 0)))
+        y = sin(delta_lon) * cos(lat2)
+        x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(delta_lon)
+        bearing = round((degrees(atan2(y, x)) + 360) % 360, 2)
+
+    return {
+        "trainNo": train_no,
+        "gatewayId": latest.get("gatewayId"),
+        "position": {
+            "latitude": latest.get("latitude"),
+            "longitude": latest.get("longitude"),
+            "positionMm": latest.get("positionMm"),
+            "speedKmph": latest.get("speedKmph"),
+            "bearing": bearing,
+            "createdAt": serialize(latest.get("createdAt")),
+        },
+    }
+
+
 @app.get("/api/v1/map/alerts")
 async def map_alerts(train_id: str):
     alerts = await db.alert_events.find({"trainNo": train_id, "sessionStatus": {"$ne": "archived"}}).sort("createdAt", -1).limit(200).to_list(length=200)
@@ -888,34 +1054,18 @@ async def map_alerts(train_id: str):
 
 @app.get("/api/v1/map/rms")
 async def map_rms(train_id: str, gateway_id: str | None = None):
-    archive_query: dict[str, Any] = {"trainId": train_id, "rmsRecordCount": {"$gt": 0}}
-    if gateway_id:
-        archive_query["gatewayId"] = gateway_id
-
-    archives = await db.archives.find(
-        archive_query,
-        {"gatewayId": 1, "sha256": 1, "receivedAt": 1},
-    ).sort("receivedAt", -1).to_list(length=50)
-
-    latest_archive_by_gateway: dict[str, str] = {}
-    for archive in archives:
-        gateway = archive.get("gatewayId")
-        archive_sha = archive.get("sha256") or archive.get("archiveSha256")
-        if gateway and archive_sha and gateway not in latest_archive_by_gateway:
-            latest_archive_by_gateway[gateway] = archive_sha
-
     query: dict[str, Any] = {
         "trainId": train_id,
         "gpsValid": True,
         "latitude": {"$nin": [None, 0]},
         "longitude": {"$nin": [None, 0]},
     }
-    if latest_archive_by_gateway:
-        query["archiveSha256"] = {"$in": list(latest_archive_by_gateway.values())}
     if gateway_id:
         query["gatewayId"] = gateway_id
 
-    records = await db.rms_records.find(
+    # Return recent valid GPS records for each gateway.  This keeps the route
+    # visible even if the latest archive for one gateway has no valid GPS data.
+    recent_records = await db.rms_records.find(
         query,
         {
             "trainId": 1,
@@ -930,7 +1080,18 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
             "createdAt": 1,
             "archiveSha256": 1,
         },
-    ).sort([("gatewayId", 1), ("positionMm", 1)]).limit(5000).to_list(length=5000)
+    ).sort([("createdAt", -1), ("gatewayId", 1), ("positionMm", -1)]).limit(5000).to_list(length=5000)
+
+    records_by_gateway: dict[str, list[dict[str, Any]]] = {}
+    for item in recent_records:
+        gateway = item.get("gatewayId") or "unknown"
+        records_by_gateway.setdefault(gateway, []).append(item)
+
+    records: list[dict[str, Any]] = []
+    for gateway_records in records_by_gateway.values():
+        # Keep the latest route-sized window per gateway, then sort spatially so
+        # Leaflet draws the path in train movement order.
+        records.extend(sorted(gateway_records[:600], key=lambda item: item.get("positionMm") or 0))
 
     return [
         {
