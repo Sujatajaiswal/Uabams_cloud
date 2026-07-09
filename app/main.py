@@ -7,7 +7,13 @@ from secrets import token_hex
 from typing import Annotated, Any
 from urllib.parse import parse_qs
 
+import json
 import jwt
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from bson import ObjectId
 from fastapi import Body, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -25,6 +31,10 @@ from app.models import (
     HeartbeatRequest,
     ResetSessionRequest,
     TargetedResetRequest,
+    HandshakeHelloRequest,
+    HandshakeHelloResponse,
+    HandshakeVerifyRequest,
+    HandshakeVerifyResponse,
 )
 from app.parsers.archive import parse_archive_zip, peak_records_to_alert_events
 
@@ -402,6 +412,8 @@ async def startup() -> None:
     await db.reset_events.create_index([("trainNo", 1), ("createdAt", -1)])
     await db.activity_logs.create_index([("username", 1), ("createdAt", -1)])
     await db.activity_logs.create_index([("page", 1), ("createdAt", -1)])
+    await db.handshake_sessions.create_index("sessionId", unique=True)
+    await db.handshake_sessions.create_index("createdAt", expireAfterSeconds=300)
 
 
 @app.get("/")
@@ -561,6 +573,114 @@ async def handshake(data: HandshakeRequest):
     }
 
 
+@app.post("/api/v1/handshake/hello", response_model=HandshakeHelloResponse)
+async def handshake_hello(data: HandshakeHelloRequest):
+    gateway = await db.gateways.find_one({"gatewayId": data.gatewayId})
+    if not gateway:
+        raise HTTPException(status_code=404, detail="Gateway not registered")
+
+    # 1. Generate server ephemeral key pair
+    server_private_key = ec.generate_private_key(ec.SECP256R1())
+    server_public_key = server_private_key.public_key()
+
+    # 2. Serialize keys to hex
+    server_pub_bytes = server_public_key.public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.UncompressedPoint
+    )
+    server_pub_hex = server_pub_bytes.hex()
+
+    server_priv_bytes = server_private_key.private_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    server_priv_hex = server_priv_bytes.hex()
+
+    # 3. Create challenge nonce & session ID
+    nonce = token_hex(16)
+    session_id = token_hex(16)
+
+    # 4. Save session state in MongoDB
+    await db.handshake_sessions.insert_one({
+        "sessionId": session_id,
+        "gatewayId": data.gatewayId,
+        "serverPrivateKeyHex": server_priv_hex,
+        "clientPublicKeyHex": data.clientPublicKey,
+        "nonce": nonce,
+        "verified": False,
+        "createdAt": utc_now(),
+    })
+
+    return HandshakeHelloResponse(
+        serverPublicKey=server_pub_hex,
+        nonce=nonce,
+        sessionId=session_id
+    )
+
+
+@app.post("/api/v1/handshake/verify", response_model=HandshakeVerifyResponse)
+async def handshake_verify(data: HandshakeVerifyRequest):
+    session = await db.handshake_sessions.find_one({"sessionId": data.sessionId})
+    if not session:
+        raise HTTPException(status_code=404, detail="Handshake session not found or expired")
+
+    try:
+        # 1. Load keys
+        server_private_key = serialization.load_der_private_key(
+            bytes.fromhex(session["serverPrivateKeyHex"]),
+            password=None
+        )
+        client_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+            ec.SECP256R1(),
+            bytes.fromhex(session["clientPublicKeyHex"])
+        )
+
+        # 2. Compute Diffie-Hellman Shared Secret
+        shared_key = server_private_key.exchange(ec.ECDH(), client_public_key)
+
+        # 3. Derive symmetric key via HKDF
+        session_key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=None,
+            info=b"uabams-handshake-session-key",
+        ).derive(shared_key)
+
+        # 4. Compute expected HMAC
+        import hmac as python_hmac
+        expected_hmac = python_hmac.new(
+            session_key,
+            session["nonce"].encode("utf-8"),
+            digestmod=sha256
+        ).hexdigest()
+
+        # 5. Compare signatures using timing-safe compare_digest
+        if not compare_digest(data.clientHmac.lower(), expected_hmac.lower()):
+            raise HTTPException(status_code=401, detail="HMAC verification failed")
+
+        # 6. Save derived session key & verify session
+        await db.handshake_sessions.update_one(
+            {"_id": session["_id"]},
+            {"$set": {
+                "verified": True,
+                "sessionKeyHex": session_key.hex(),
+                "verifiedAt": utc_now()
+            }}
+        )
+
+        return HandshakeVerifyResponse(
+            status="verified",
+            message="Handshake verified successfully",
+            sessionToken=data.sessionId
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid public key: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Handshake error: {exc}")
+
+
 @app.post("/api/v1/authenticate")
 async def authenticate(data: AuthRequest):
     gateway_auth = await db.gateway_auth.find_one({"gatewayId": data.gatewayId})
@@ -650,17 +770,30 @@ def location_box(latitude: float, longitude: float, radius_meters: float) -> dic
 @app.put("/api/v1/archive")
 async def upload_archive(
     request: Request,
-    archive_body: Annotated[bytes, Body(media_type="application/zip")],
-    x_api_key: Annotated[str, Header(alias="X-Api-Key")],
+    archive_body: Annotated[bytes, Body(media_type="application/octet-stream")],
+    x_api_key: Annotated[str | None, Header(alias="X-Api-Key")] = None,
     x_sha256: Annotated[str | None, Header(alias="X-Sha256")] = None,
+    x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
+    x_session_iv: Annotated[str | None, Header(alias="X-Session-Iv")] = None,
 ):
     gateway_id = request.state.gateway_id
-    body = archive_body
     expected_sha256 = x_sha256 or request.headers.get("X-Archive-Sha256")
-    actual_sha256 = sha256(body).hexdigest()
+    actual_sha256 = sha256(archive_body).hexdigest()
 
     if expected_sha256 and expected_sha256.lower() != actual_sha256:
         raise HTTPException(status_code=400, detail="SHA-256 mismatch")
+
+    body = archive_body
+    if x_session_id:
+        if not hasattr(request.state, "session_key"):
+            raise HTTPException(status_code=401, detail="Session key not found in request state")
+        if not x_session_iv:
+            raise HTTPException(status_code=400, detail="Missing X-Session-Iv header for encrypted payload")
+        try:
+            aesgcm = AESGCM(request.state.session_key)
+            body = aesgcm.decrypt(bytes.fromhex(x_session_iv), archive_body, None)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to decrypt payload: {exc}")
 
     try:
         parsed = parse_archive_zip(body)
@@ -797,13 +930,39 @@ async def upload_archive(
 
 @app.post("/api/v1/alert")
 async def create_alert(
-    data: AlertRequest,
     request: Request,
-    x_api_key: Annotated[str, Header(alias="X-Api-Key")],
+    x_api_key: Annotated[str | None, Header(alias="X-Api-Key")] = None,
+    x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
+    x_session_iv: Annotated[str | None, Header(alias="X-Session-Iv")] = None,
 ):
     gateway_id = request.state.gateway_id
+    raw_body = await request.body()
+    
+    if x_session_id:
+        if not hasattr(request.state, "session_key"):
+            raise HTTPException(status_code=401, detail="Session key not found in request state")
+        if not x_session_iv:
+            raise HTTPException(status_code=400, detail="Missing X-Session-Iv header for encrypted payload")
+        try:
+            aesgcm = AESGCM(request.state.session_key)
+            decrypted_body = aesgcm.decrypt(bytes.fromhex(x_session_iv), raw_body, None)
+            alert_json = json.loads(decrypted_body.decode("utf-8"))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to decrypt payload: {exc}")
+    else:
+        try:
+            alert_json = json.loads(raw_body.decode("utf-8"))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {exc}")
+
+    from pydantic import ValidationError
+    try:
+        data = AlertRequest(**alert_json)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+
     if data.gatewayId and data.gatewayId != gateway_id:
-        raise HTTPException(status_code=403, detail="API key does not belong to supplied gateway")
+        raise HTTPException(status_code=403, detail="Session or API key does not belong to supplied gateway")
     train_no = await resolve_train_id(gateway_id, data.trainNo, request.state.train_id)
 
     if data.peakValueG > 80:

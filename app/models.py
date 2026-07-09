@@ -73,3 +73,25 @@ class GatewayStatus(BaseModel):
     online: bool
     lastHeartbeat: datetime | None = None
     status: Literal["active", "inactive"] = "active"
+
+
+class HandshakeHelloRequest(BaseModel):
+    gatewayId: str
+    clientPublicKey: str
+
+
+class HandshakeHelloResponse(BaseModel):
+    serverPublicKey: str
+    nonce: str
+    sessionId: str
+
+
+class HandshakeVerifyRequest(BaseModel):
+    sessionId: str
+    clientHmac: str
+
+
+class HandshakeVerifyResponse(BaseModel):
+    status: str
+    message: str
+    sessionToken: str

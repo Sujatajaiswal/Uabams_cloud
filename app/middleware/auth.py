@@ -39,28 +39,43 @@ class GatewayAuthMiddleware(BaseHTTPMiddleware):
             supplied_gateway_id = request.headers.get("X-Gateway-Id")
             train_id = request.headers.get("X-Train-Id")
             api_key = request.headers.get("X-Api-Key")
+            session_id = request.headers.get("X-Session-Id")
 
-            if not api_key:
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Missing gateway API key"},
-                )
+            if session_id:
+                from app.database import db
+                session = await db.handshake_sessions.find_one({"sessionId": session_id})
+                if not session or not session.get("verified"):
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": "Invalid or expired session"},
+                    )
+                gateway_id = session["gatewayId"]
+                request.state.gateway_id = gateway_id
+                request.state.train_id = train_id
+                request.state.session_id = session_id
+                request.state.session_key = bytes.fromhex(session["sessionKeyHex"])
+            else:
+                if not api_key:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Missing gateway API key"},
+                    )
 
-            gateway_id = gateway_id_for_key(api_key)
-            if not gateway_id:
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "Invalid gateway API key"},
-                )
+                gateway_id = gateway_id_for_key(api_key)
+                if not gateway_id:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": "Invalid gateway API key"},
+                    )
+
+                request.state.gateway_id = gateway_id
+                request.state.train_id = train_id
+                request.state.api_key = api_key
 
             if supplied_gateway_id and supplied_gateway_id != gateway_id:
                 return JSONResponse(
                     status_code=403,
-                    content={"detail": "API key does not belong to supplied gateway"},
+                    content={"detail": "API key or session does not belong to supplied gateway"},
                 )
-
-            request.state.gateway_id = gateway_id
-            request.state.train_id = train_id
-            request.state.api_key = api_key
 
         return await call_next(request)
