@@ -794,6 +794,11 @@ async def upload_archive(
             body = aesgcm.decrypt(bytes.fromhex(x_session_iv), archive_body, None)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Failed to decrypt payload: {exc}")
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="Unencrypted uploads are not allowed. Please perform a cryptographic handshake to establish a secure session."
+        )
 
     try:
         parsed = parse_archive_zip(body)
@@ -950,10 +955,10 @@ async def create_alert(
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Failed to decrypt payload: {exc}")
     else:
-        try:
-            alert_json = json.loads(raw_body.decode("utf-8"))
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {exc}")
+        raise HTTPException(
+            status_code=403,
+            detail="Unencrypted alerts are not allowed. Please perform a cryptographic handshake to establish a secure session."
+        )
 
     from pydantic import ValidationError
     try:
