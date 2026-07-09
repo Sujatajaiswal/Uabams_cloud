@@ -1253,9 +1253,14 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
 
     records: list[dict[str, Any]] = []
     for gateway_records in records_by_gateway.values():
-        # Keep the latest route-sized window per gateway, then sort spatially so
-        # Leaflet draws the path in train movement order.
-        records.extend(sorted(gateway_records[:600], key=lambda item: item.get("positionMm") or 0))
+        if not gateway_records:
+            continue
+        # Only show points from the latest archive upload for a clean route line
+        latest_archive = gateway_records[0].get("archiveSha256")
+        filtered = [r for r in gateway_records if r.get("archiveSha256") == latest_archive]
+        # Sort chronologically by creation time so the route is drawn in movement order
+        filtered.sort(key=lambda x: x.get("createdAt") or 0)
+        records.extend(filtered)
 
     return [
         {
