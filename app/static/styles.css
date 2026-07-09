@@ -782,3 +782,8 @@ code { font-family: Consolas, monospace; font-size: 13px; }
   box-shadow: 0 6px 16px rgba(15,23,42,0.35);
   transform-origin: center;
 }
+
+/* Fallback for Leaflet SVG path fill behavior when unpkg.com leaflet.css is slow or fails to load */
+.leaflet-container path {
+  fill: none;
+}
