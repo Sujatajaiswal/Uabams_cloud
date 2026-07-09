@@ -773,6 +773,8 @@ async def upload_archive(
     archive_body: Annotated[bytes, Body(media_type="application/octet-stream")],
     x_api_key: Annotated[str | None, Header(alias="X-Api-Key")] = None,
     x_sha256: Annotated[str | None, Header(alias="X-Sha256")] = None,
+    x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
+    x_session_iv: Annotated[str | None, Header(alias="X-Session-Iv")] = None,
 ):
     gateway_id = request.state.gateway_id
     expected_sha256 = x_sha256 or request.headers.get("X-Archive-Sha256")
@@ -780,9 +782,6 @@ async def upload_archive(
 
     if expected_sha256 and expected_sha256.lower() != actual_sha256:
         raise HTTPException(status_code=400, detail="SHA-256 mismatch")
-
-    x_session_id = request.headers.get("X-Session-Id")
-    x_session_iv = request.headers.get("X-Session-Iv")
 
     body = archive_body
     if x_session_id:
@@ -933,12 +932,11 @@ async def upload_archive(
 async def create_alert(
     request: Request,
     x_api_key: Annotated[str | None, Header(alias="X-Api-Key")] = None,
+    x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
+    x_session_iv: Annotated[str | None, Header(alias="X-Session-Iv")] = None,
 ):
     gateway_id = request.state.gateway_id
     raw_body = await request.body()
-    
-    x_session_id = request.headers.get("X-Session-Id")
-    x_session_iv = request.headers.get("X-Session-Iv")
     
     if x_session_id:
         if not hasattr(request.state, "session_key"):
