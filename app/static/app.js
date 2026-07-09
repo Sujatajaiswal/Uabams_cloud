@@ -461,6 +461,7 @@ function drawColoredRoute(layer, points) {
     lineCap: 'round',
     lineJoin: 'round',
     smoothFactor: 1.2,
+    className: 'route-line-shadow',
   }).addTo(layer);
 
   for (let i = 1; i < points.length; i += 1) {
@@ -476,6 +477,7 @@ function drawColoredRoute(layer, points) {
         lineCap: 'round',
         lineJoin: 'round',
         smoothFactor: 1.2,
+        className: 'route-line',
       }
     ).addTo(layer);
     if (i % 8 === 0 || severity === 'RED') addDirectionArrow(layer, previous, current, severity);

@@ -1196,7 +1196,14 @@ async def train_position(train_no: str, gateway_id: str | None = None):
 
 @app.get("/api/v1/map/alerts")
 async def map_alerts(train_id: str):
-    alerts = await db.alert_events.find({"trainNo": train_id, "sessionStatus": {"$ne": "archived"}}).sort("createdAt", -1).limit(200).to_list(length=200)
+    # Find the latest session for this train from rms_records to identify the current active trip
+    latest_record = await db.rms_records.find_one({"trainId": train_id}, sort=[("createdAt", -1)])
+    
+    query = {"trainNo": train_id, "sessionStatus": {"$ne": "archived"}}
+    if latest_record and latest_record.get("sessionName"):
+        query["sessionName"] = latest_record["sessionName"]
+        
+    alerts = await db.alert_events.find(query).sort("createdAt", -1).limit(200).to_list(length=200)
     return [
         {
             "train_id": item.get("trainNo"),
