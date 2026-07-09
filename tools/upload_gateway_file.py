@@ -122,7 +122,7 @@ def main():
             archive_res = json.loads(res.read().decode("utf-8"))
 
         print("\n=============================================================")
-        print("🎉 SUCCESS! File uploaded securely from Gateway to Cloud.")
+        print("SUCCESS! File uploaded securely from Gateway to Cloud.")
         print(f"Server Response: {archive_res}")
         print("=============================================================\n")
 
