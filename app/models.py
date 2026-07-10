@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Any
 
 from pydantic import BaseModel, Field
 
@@ -95,3 +95,15 @@ class HandshakeVerifyResponse(BaseModel):
     status: str
     message: str
     sessionToken: str
+
+
+class GatewayConnectionRequest(BaseModel):
+    serialNo: str
+    sensorReadings: dict[str, Any] | None = None
+
+
+class GatewayConnectionResponse(BaseModel):
+    status: str
+    message: str
+    gatewayId: str | None = None
+    trainId: str | None = None

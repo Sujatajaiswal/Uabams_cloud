@@ -35,6 +35,8 @@ from app.models import (
     HandshakeHelloResponse,
     HandshakeVerifyRequest,
     HandshakeVerifyResponse,
+    GatewayConnectionRequest,
+    GatewayConnectionResponse,
 )
 from app.parsers.archive import parse_archive_zip, peak_records_to_alert_events
 
@@ -700,6 +702,42 @@ async def authenticate(data: AuthRequest):
     )
 
     return {"status": "authenticated", "token": token}
+
+
+@app.post("/api/v1/gateway/demo-connect", response_model=GatewayConnectionResponse)
+async def gateway_demo_connect(data: GatewayConnectionRequest):
+    # Find matching gateway document by serialNo (or gatewayId as fallback)
+    gateway = await db.gateways.find_one({
+        "$or": [
+            {"gatewaySerial": data.serialNo},
+            {"gatewayId": data.serialNo}
+        ]
+    })
+    
+    if not gateway:
+        return GatewayConnectionResponse(
+            status="denied",
+            message=f"Access denied: Serial number or Gateway ID '{data.serialNo}' is not registered in the cloud database.",
+            gatewayId=None,
+            trainId=None
+        )
+        
+    # Check if the gateway is active
+    if gateway.get("status") != "active":
+        return GatewayConnectionResponse(
+            status="denied",
+            message=f"Access denied: Gateway '{gateway.get('gatewayId')}' is registered but its current status is '{gateway.get('status')}' (must be 'active').",
+            gatewayId=gateway.get("gatewayId"),
+            trainId=gateway.get("trainId")
+        )
+        
+    return GatewayConnectionResponse(
+        status="approved",
+        message=f"Gateway connectivity approved! Gateway '{gateway.get('gatewayId')}' is registered and active.",
+        gatewayId=gateway.get("gatewayId"),
+        trainId=gateway.get("trainId")
+    )
+
 
 
 @app.post("/api/v1/heartbeat")
