@@ -515,7 +515,7 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
     const routePoints = validRmsPoints.filter((point) => point.gateway_id === gatewayId);
     const rawAlertPoints = (mapAlerts.length ? mapAlerts : alerts.map(dashboardAlertToMapPoint))
       .filter((point) => point.gateway_id === gatewayId)
-      .filter((point) => normalizeAlert(point.color) === 'RED')
+      .filter((point) => ['RED', 'YELLOW', 'GREEN'].includes(normalizeAlert(point.color)))
       .filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)))
       .slice()
       .reverse();
@@ -537,11 +537,12 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
 
     alertPoints.forEach((point, index) => {
       const markerPoint = jitterPoint(point.lat, point.lon, index);
+      const severity = normalizeAlert(point.color);
       L.circleMarker(markerPoint, {
         radius: 13,
         color: '#111827',
         weight: 2,
-        fillColor: alertColor('RED'),
+        fillColor: alertColor(severity),
         fillOpacity: 1,
       })
         .addTo(layer)
