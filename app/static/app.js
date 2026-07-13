@@ -244,7 +244,7 @@ function renderGatewayCards(gatewayIdsToShow, gateways = [], train = {}, alerts 
           <span class="badge ${gw.online ? 'online' : 'offline'}">${gw.online ? 'Online' : 'Offline'}</span>
         </div>
         <div class="gateway-kpis">
-          <div><span>Train</span><strong>${gw.trainId || train.trainNo || '-'}</strong></div>
+          <div><span>Train</span><strong>${train.trainNo || gw.trainId || '-'}</strong></div>
           <div><span>Latest Peak</span><strong>${latest ? `${latest.peakValueG} G` : '-'}</strong></div>
           <div class="alert-kpi ${latest ? alertStatus : ''}"><span>Alert</span><strong>${latest ? alertStatus : '-'}</strong></div>
           <div><span>Archives</span><strong>${archiveCountFor(archives, gatewayId)}</strong></div>
@@ -379,7 +379,7 @@ function renderDashboard(data) {
           <span class="badge ${gw.online ? 'online' : 'offline'}">${gw.online ? 'Online' : 'Offline'}</span>
         </div>
         <div class="gateway-kpis">
-          <div><span>Train</span><strong>${gw.trainId || train.trainNo || '-'}</strong></div>
+          <div><span>Train</span><strong>${train.trainNo || gw.trainId || '-'}</strong></div>
           <div><span>Latest Peak</span><strong>${latest ? `${latest.peakValueG} G` : '-'}</strong></div>
           <div class="alert-kpi ${latest ? alertStatus : ''}"><span>Alert</span><strong>${latest ? alertStatus : '-'}</strong></div>
           <div><span>Archives</span><strong>${archiveCountFor(archives, gatewayId)}</strong></div>
