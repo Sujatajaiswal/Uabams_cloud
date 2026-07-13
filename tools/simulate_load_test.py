@@ -70,7 +70,11 @@ def build_peak(train_idx: int, records: int) -> bytes:
     for i in range(records):
         window_start = i * 50000
         window_end = window_start + 50000
-        max_g = random.uniform(10, 85)
+        if i == 0:
+            # Force at least one high g-force anomaly to guarantee alerts are generated for this train
+            max_g = random.uniform(82, 95)
+        else:
+            max_g = random.uniform(10, 75)
         alert_generated = max_g > 80
         output += struct.pack(PEAK_HEADER_FORMAT, window_start, window_end, random.uniform(75, 105), 0xFF, alert_generated)
         for axis in range(AXIS_COUNT):
