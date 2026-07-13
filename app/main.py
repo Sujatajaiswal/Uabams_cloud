@@ -1096,6 +1096,13 @@ async def save_calibration(
     return {"status": "success", "message": "Calibration saved", "calibration": serialize(document)}
 
 
+@app.get("/api/v1/trains")
+async def list_trains():
+    trains_cursor = db.trains.find({}, {"_id": 0, "trainNo": 1})
+    trains = await trains_cursor.to_list(length=1000)
+    return sorted(list(set([t["trainNo"] for t in trains if t.get("trainNo")])))
+
+
 @app.get("/api/v1/trains/{train_no}/dashboard")
 async def train_dashboard(train_no: str):
     train = await db.trains.find_one({"trainNo": train_no})

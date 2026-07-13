@@ -98,15 +98,27 @@ function renderRecentTrainNumbers() {
 
   if (!list || !input) return;
 
-  const trains = recentTrainNumbers();
+  const localTrains = recentTrainNumbers();
+  const renderList = (allTrains) => {
+    list.innerHTML = allTrains
+      .map((trainNo) => `<option value="${escapeHtml(trainNo)}"></option>`)
+      .join('');
+    if (allTrains.length > 0 && !input.value) {
+      input.value = allTrains[0];
+    }
+  };
 
-  list.innerHTML = trains
-    .map((trainNo) => `<option value="${escapeHtml(trainNo)}"></option>`)
-    .join('');
+  renderList(localTrains);
 
-  if (trains.length > 0) {
-    input.value = trains[0];
-  }
+  fetch('/api/v1/trains')
+    .then((res) => res.json())
+    .then((serverTrains) => {
+      if (Array.isArray(serverTrains)) {
+        const combined = Array.from(new Set([...localTrains, ...serverTrains]));
+        renderList(combined);
+      }
+    })
+    .catch((err) => console.error('Failed to load train list:', err));
 }
 
 function rememberTrainNumber(trainNo) {
