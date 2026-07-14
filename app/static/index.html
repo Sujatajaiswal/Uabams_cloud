@@ -219,7 +219,7 @@
     <!-- Repeated Alarm Panel -->
     <section id="repeated_alarm" class="panel">
       <div class="page-header">
-        <h2>Repeated Alarm - Rolling Stock</h2>
+        <h2>Repeated Alarm </h2>
       </div>
 
       <div class="search-toolbar">
@@ -255,11 +255,12 @@
               <tr>
                 <th data-field="rid">RID</th>
                 <th data-field="count">Count</th>
+                <th data-field="location">Location</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="repeatedAlarmsTableBody">
-              <tr><td colspan="3">Click Load Report to fetch data.</td></tr>
+              <tr><td colspan="4">Click Load Report to fetch data.</td></tr>
             </tbody>
           </table>
         </div>
@@ -295,21 +296,11 @@
             </select>
           </div>
         </div>
-        <div class="toolbar-item">
-          <label for="feedbackStatusFilter">Feedback Status</label>
-          <div class="select-wrapper">
-            <select id="feedbackStatusFilter" class="form-select">
-              <option value="All">All</option>
-              <option value="Updated">Updated</option>
-              <option value="Pending">Pending</option>
-            </select>
-          </div>
-        </div>
         <button id="loadReportBtn" class="primary" style="height: 38px;">Load Report</button>
       </div>
 
       <div class="summary-section" id="summarySection">
-        <div class="summary-grid">
+        <div class="summary-grid" style="grid-template-columns: repeat(4, minmax(150px, 1fr));">
           <div class="summary-card">
             <div class="summary-icon total-records-icon">
               <i class="bi bi-list-columns-reverse"></i>
@@ -346,30 +337,12 @@
               <strong id="maintenanceAlarmCard" class="summary-value">0</strong>
             </div>
           </div>
-          <div class="summary-card">
-            <div class="summary-icon feedback-updated-icon">
-              <i class="bi bi-check-circle"></i>
-            </div>
-            <div class="summary-content">
-              <span class="summary-label">Feedback Updated</span>
-              <strong id="feedbackUpdatedCard" class="summary-value">0</strong>
-            </div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-icon feedback-pending-icon">
-              <i class="bi bi-clock-history"></i>
-            </div>
-            <div class="summary-content">
-              <span class="summary-label">Feedback Pending</span>
-              <strong id="feedbackPendingCard" class="summary-value">0</strong>
-            </div>
-          </div>
         </div>
       </div>
 
       <div class="current-result-section" id="currentResultSection" style="display:none;">
         <h4 class="current-result-title">Current Result Set (Based on Applied Filters)</h4>
-        <div class="current-result-grid">
+        <div class="current-result-grid" style="grid-template-columns: repeat(3, 1fr);">
           <div class="result-item">
             <i class="bi bi-tag result-icon"></i>
             <div class="result-content">
@@ -382,13 +355,6 @@
             <div class="result-content">
               <span class="result-label">Alarm Type</span>
               <strong id="currentAlarmType" class="result-value">-</strong>
-            </div>
-          </div>
-          <div class="result-item">
-            <i class="bi bi-chat-left-dots result-icon"></i>
-            <div class="result-content">
-              <span class="result-label">Feedback Status</span>
-              <strong id="currentFeedbackStatus" class="result-value">-</strong>
             </div>
           </div>
           <div class="result-item">
@@ -422,50 +388,17 @@
                 <th data-field="alarmTime">Time</th>
                 <th data-field="machineName">Machine</th>
                 <th data-field="train">Train</th>
-                <th data-field="trainType">Train Type</th>
-                <th data-field="axleNo">Axle No</th>
-                <th data-field="enrouteDiagnosis">Enroute Diagnosis</th>
-                <th data-field="enrouteActionTaken">Enroute Action</th>
-                <th data-field="depotDiagnosis">Depot Diagnosis</th>
-                <th data-field="maximumDynamicLoadLeft">MDL (Left)</th>
-                <th data-field="impactLoadFactorLeft">ILF (Left)</th>
-                <th data-field="maximumDynamicLoadRight">MDL (Right)</th>
-                <th data-field="impactLoadFactorRight">ILF (Right)</th>
-                <th>Actions</th>
+                <th data-field="location">Location</th>
               </tr>
             </thead>
             <tbody id="alarmLogTableBody">
-              <tr><td colspan="14">Click Load Report to fetch data.</td></tr>
+              <tr><td colspan="5">Click Load Report to fetch data.</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- Feedback Modal Dialog -->
-    <div id="feedbackModal" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Update Alarm Feedback</h3>
-          <button id="closeFeedbackModalBtn" class="close-btn">&times;</button>
-        </div>
-        <div class="modal-body">
-          <input type="hidden" id="feedbackAlertId">
-          <div class="form-group" style="margin-bottom: 12px;">
-            <label style="font-weight: 600;">Enroute Diagnosis</label>
-            <input type="text" id="feedbackEnrouteDiagnosis" class="form-control" style="width:100%;" placeholder="e.g. Wheel flats detected">
-          </div>
-          <div class="form-group" style="margin-bottom: 12px;">
-            <label style="font-weight: 600;">Enroute Action Taken</label>
-            <input type="text" id="feedbackEnrouteAction" class="form-control" style="width:100%;" placeholder="e.g. Speed restricted to 60kmph">
-          </div>
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="font-weight: 600;">Depot Diagnosis</label>
-            <input type="text" id="feedbackDepotDiagnosis" class="form-control" style="width:100%;" placeholder="e.g. Wheel profiling scheduled">
-          </div>
-          <button id="submitFeedbackBtn" class="primary" style="width: 100%; height: 38px;">Submit Feedback</button>
-        </div>
-      </div>
     </div>
   </main>
 

@@ -1304,6 +1304,7 @@ function renderRepeatedAlarmsTable(rows) {
     <tr>
       <td><strong>${escapeHtml(row.rid)}</strong></td>
       <td>${row.count}</td>
+      <td>${escapeHtml(row.location || '-')}</td>
       <td>
         <div style="position: relative; display: inline-block;">
           <button class="dropdown-action-btn" onclick="toggleRowDropdown(event, '${row.rid}')"><i class="bi bi-eye"></i> View <i class="bi bi-chevron-down"></i></button>
@@ -1313,7 +1314,7 @@ function renderRepeatedAlarmsTable(rows) {
         </div>
       </td>
     </tr>
-  `).join('') : '<tr><td colspan="3">No results found.</td></tr>';
+  `).join('') : '<tr><td colspan="4">No results found.</td></tr>';
 }
 
 function toggleRowDropdown(event, rid) {
@@ -1338,7 +1339,7 @@ async function loadAlarmLogReport() {
     fromDate: $('fromDate').value,
     toDate: $('toDate').value,
     alarmType: $('alarmTypeFilter').value,
-    feedbackStatus: $('feedbackStatusFilter').value
+    feedbackStatus: null
   };
   try {
     const data = await ApiClient.post('/api/reports/alarm-log/load', request);
@@ -1364,21 +1365,17 @@ function renderSummary(summary) {
   $('totalAlarmCard').textContent = summary.totalAlarmCount ?? 0;
   $('criticalAlarmCard').textContent = summary.criticalAlarmCount ?? 0;
   $('maintenanceAlarmCard').textContent = summary.maintenanceAlarmCount ?? 0;
-  $('feedbackUpdatedCard').textContent = summary.feedbackUpdated ?? 0;
-  $('feedbackPendingCard').textContent = summary.feedbackPending ?? 0;
 }
 
 function renderCurrentResultSet() {
   $('currentResultSection').style.display = "block";
   const rid = $('ridInput').value.trim() || "ALL";
   const alarmType = $('alarmTypeFilter').value || "ALL";
-  const feedbackStatus = $('feedbackStatusFilter').value || "ALL";
   const fromDate = $('fromDate').value;
   const toDate = $('toDate').value;
   
   $('currentRid').textContent = rid;
   $('currentAlarmType').textContent = alarmType;
-  $('currentFeedbackStatus').textContent = feedbackStatus;
   $('currentDateRange').textContent = `${DateUtils.formatDisplayDateTime(fromDate)} → ${DateUtils.formatDisplayDateTime(toDate)}`;
 }
 
@@ -1402,20 +1399,9 @@ function renderTable(rows) {
       <td>${row.alarmTime}</td>
       <td>${escapeHtml(row.machineName)}</td>
       <td><strong>${escapeHtml(row.train)}</strong></td>
-      <td>${escapeHtml(row.trainType)}</td>
-      <td>${row.axleNo}</td>
-      <td>${escapeHtml(row.enrouteDiagnosis)}</td>
-      <td>${escapeHtml(row.enrouteActionTaken)}</td>
-      <td>${escapeHtml(row.depotDiagnosis)}</td>
-      <td>${row.maximumDynamicLoadLeft}</td>
-      <td>${row.impactLoadFactorLeft}</td>
-      <td>${row.maximumDynamicLoadRight}</td>
-      <td>${row.impactLoadFactorRight}</td>
-      <td>
-        <button class="table-btn" onclick="showFeedbackModal('${row.id}', '${escapeHtml(row.enrouteDiagnosis)}', '${escapeHtml(row.enrouteActionTaken)}', '${escapeHtml(row.depotDiagnosis)}')">Feedback</button>
-      </td>
+      <td>${escapeHtml(row.location || '-')}</td>
     </tr>
-  `).join('') : '<tr><td colspan="14">No results found.</td></tr>';
+  `).join('') : '<tr><td colspan="5">No results found.</td></tr>';
 }
 
 function refreshTable() {

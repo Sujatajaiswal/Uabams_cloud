@@ -1496,7 +1496,7 @@ class AlarmLogRequest(BaseModel):
     fromDate: str
     toDate: str
     alarmType: str
-    feedbackStatus: str
+    feedbackStatus: str | None = None
 
 class FeedbackUpdateRequest(BaseModel):
     enrouteDiagnosis: str
@@ -1527,7 +1527,15 @@ async def load_repeated_alarm_report(data: RepeatedAlarmRequest, request: Reques
     
     pipeline = [
         {"$match": {"createdAt": {"$gte": from_dt, "$lte": to_dt}}},
-        {"$group": {"_id": "$trainNo", "count": {"$sum": 1}}},
+        {"$sort": {"createdAt": -1}},
+        {
+            "$group": {
+                "_id": "$trainNo",
+                "count": {"$sum": 1},
+                "latitude": {"$first": "$latitude"},
+                "longitude": {"$first": "$longitude"}
+            }
+        },
         {"$sort": {"count": -1}}
     ]
     results = await db.alert_events.aggregate(pipeline).to_list(length=1000)
@@ -1536,9 +1544,13 @@ async def load_repeated_alarm_report(data: RepeatedAlarmRequest, request: Reques
     for r in results:
         train_no = r.get("_id")
         if train_no:
+            lat = r.get("latitude")
+            lon = r.get("longitude")
+            loc_str = f"{lat:.4f}, {lon:.4f}" if (lat is not None and lon is not None) else "-"
             rows.append({
                 "rid": train_no,
-                "count": r.get("count", 0)
+                "count": r.get("count", 0),
+                "location": loc_str
             })
             
     return {
@@ -1552,21 +1564,12 @@ async def export_repeated_alarm_csv(data: RepeatedAlarmRequest, request: Request
     if not is_operator_authenticated(request):
         raise HTTPException(status_code=401, detail="Login required")
         
-    from_dt = parse_local_datetime(data.fromDate)
-    to_dt = parse_local_datetime(data.toDate)
+    res = await load_repeated_alarm_report(data, request)
+    rows = res["rows"]
     
-    pipeline = [
-        {"$match": {"createdAt": {"$gte": from_dt, "$lte": to_dt}}},
-        {"$group": {"_id": "$trainNo", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
-    ]
-    results = await db.alert_events.aggregate(pipeline).to_list(length=1000)
-    
-    csv_lines = ["RID,Count"]
-    for r in results:
-        train_no = r.get("_id")
-        if train_no:
-            csv_lines.append(f"{train_no},{r.get('count', 0)}")
+    csv_lines = ["RID,Count,Location"]
+    for r in rows:
+        csv_lines.append(f"{r['rid']},{r['count']},{r['location']}")
             
     content = "\n".join(csv_lines)
     return Response(
@@ -1581,15 +1584,8 @@ async def export_repeated_alarm_excel(data: RepeatedAlarmRequest, request: Reque
     if not is_operator_authenticated(request):
         raise HTTPException(status_code=401, detail="Login required")
         
-    from_dt = parse_local_datetime(data.fromDate)
-    to_dt = parse_local_datetime(data.toDate)
-    
-    pipeline = [
-        {"$match": {"createdAt": {"$gte": from_dt, "$lte": to_dt}}},
-        {"$group": {"_id": "$trainNo", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
-    ]
-    results = await db.alert_events.aggregate(pipeline).to_list(length=1000)
+    res = await load_repeated_alarm_report(data, request)
+    rows = res["rows"]
     
     xml_parts = [
         '<?xml version="1.0"?>',
@@ -1604,17 +1600,17 @@ async def export_repeated_alarm_excel(data: RepeatedAlarmRequest, request: Reque
         '   <Row>',
         '    <Cell><Data ss:Type="String">RID</Data></Cell>',
         '    <Cell><Data ss:Type="String">Count</Data></Cell>',
+        '    <Cell><Data ss:Type="String">Location</Data></Cell>',
         '   </Row>'
     ]
-    for r in results:
-        train_no = r.get("_id")
-        if train_no:
-            xml_parts.append(
-                f'   <Row>\n'
-                f'    <Cell><Data ss:Type="String">{train_no}</Data></Cell>\n'
-                f'    <Cell><Data ss:Type="Number">{r.get("count", 0)}</Data></Cell>\n'
-                f'   </Row>'
-            )
+    for r in rows:
+        xml_parts.append(
+            f'   <Row>\n'
+            f'    <Cell><Data ss:Type="String">{r["rid"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="Number">{r["count"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["location"]}</Data></Cell>\n'
+            f'   </Row>'
+        )
     xml_parts.extend([
         '  </Table>',
         ' </Worksheet>',
@@ -1649,19 +1645,12 @@ async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
     elif data.alarmType == "Maintenance":
         query["alert"] = {"$in": ["YELLOW", "GREEN"]}
         
-    if data.feedbackStatus == "Updated":
-        query["feedbackStatus"] = "updated"
-    elif data.feedbackStatus == "Pending":
-        query["feedbackStatus"] = {"$ne": "updated"}
-        
     alerts = await db.alert_events.find(query).sort("createdAt", -1).to_list(length=2000)
     
     rows = []
     total_records = len(alerts)
     critical_count = 0
     maintenance_count = 0
-    feedback_updated = 0
-    feedback_pending = 0
     
     for alert_doc in alerts:
         col_alert = alert_doc.get("alert", "GREEN")
@@ -1670,52 +1659,21 @@ async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
         else:
             maintenance_count += 1
             
-        f_status = alert_doc.get("feedbackStatus", "pending")
-        if f_status == "updated":
-            feedback_updated += 1
-        else:
-            feedback_pending += 1
-            
         dt = alert_doc.get("createdAt")
         date_str = dt.strftime("%d-%m-%Y") if dt else "-"
         time_str = dt.strftime("%H:%M:%S") if dt else "-"
         
-        train_val = alert_doc.get("trainNo") or ""
-        zone_code = "SR"
-        if "_" in train_val:
-            try:
-                num = int(train_val.split("_")[1])
-                if num % 3 == 0:
-                    zone_code = "NR"
-                elif num % 3 == 1:
-                    zone_code = "WR"
-            except Exception:
-                pass
-                
-        peak_g = alert_doc.get("peakValueG", 0.0)
-        mdl_left = round(peak_g * 0.25, 2)
-        mdl_right = round(peak_g * 0.23, 2)
-        ilf_left = round(peak_g * 0.12, 2)
-        ilf_right = round(peak_g * 0.11, 2)
+        lat = alert_doc.get("latitude")
+        lon = alert_doc.get("longitude")
+        loc_str = f"{lat:.4f}, {lon:.4f}" if (lat is not None and lon is not None) else "-"
         
         rows.append({
             "id": str(alert_doc.get("_id") or ""),
             "alarmDate": date_str,
             "alarmTime": time_str,
             "machineName": alert_doc.get("gatewayId") or "-",
-            "train": train_val or "-",
-            "trainType": "Goods" if "TR" in train_val and int(train_val.split("_")[1]) % 2 == 0 else "Goods",  # default to image's Goods trainType
-            "axleNo": alert_doc.get("axleNo", 21),
-            "rollingStockZoneCode": "-",
-            "rollingStockType": "-",
-            "rollingStockNumber": train_val or "-",
-            "enrouteDiagnosis": alert_doc.get("enrouteDiagnosis", "Feedback Not Updated"),
-            "enrouteActionTaken": alert_doc.get("enrouteAction", "Action Not Taken"),
-            "depotDiagnosis": alert_doc.get("depotDiagnosis", "Feedback Not Updated"),
-            "maximumDynamicLoadLeft": mdl_left,
-            "impactLoadFactorLeft": ilf_left,
-            "maximumDynamicLoadRight": mdl_right,
-            "impactLoadFactorRight": ilf_right,
+            "train": alert_doc.get("trainNo") or "-",
+            "location": loc_str,
             "alertColor": col_alert
         })
         
@@ -1723,9 +1681,7 @@ async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
         "totalRecords": total_records,
         "totalAlarmCount": total_records,
         "criticalAlarmCount": critical_count,
-        "maintenanceAlarmCount": maintenance_count,
-        "feedbackUpdated": feedback_updated,
-        "feedbackPending": feedback_pending
+        "maintenanceAlarmCount": maintenance_count
     }
     
     return {
@@ -1743,22 +1699,12 @@ async def export_alarm_log_csv(data: AlarmLogRequest, request: Request):
     res = await load_alarm_log_report(data, request)
     rows = res["rows"]
     
-    headers = [
-        "Date", "Time", "Machine", "Train", "Train Type", "Axle No", 
-        "Rolling Stock Zone Code", "Rolling Stock Type", "Rolling Stock No", 
-        "Enroute Diagnosis", "Enroute Action", "Depot Diagnosis", 
-        "MDL (Left)", "ILF (Left)", "MDL (Right)", "ILF (Right)"
-    ]
+    headers = ["Date", "Time", "Machine", "Train", "Location"]
     csv_lines = [",".join(headers)]
     
     for r in rows:
         line = [
-            r["alarmDate"], r["alarmTime"], r["machineName"], r["train"],
-            r["trainType"], str(r["axleNo"]), r["rollingStockZoneCode"],
-            r["rollingStockType"], r["rollingStockNumber"],
-            f'"{r["enrouteDiagnosis"]}"', f'"{r["enrouteActionTaken"]}"', f'"{r["depotDiagnosis"]}"',
-            str(r["maximumDynamicLoadLeft"]), str(r["impactLoadFactorLeft"]),
-            str(r["maximumDynamicLoadRight"]), str(r["impactLoadFactorRight"])
+            r["alarmDate"], r["alarmTime"], r["machineName"], r["train"], r["location"]
         ]
         csv_lines.append(",".join(line))
         
@@ -1778,12 +1724,7 @@ async def export_alarm_log_excel(data: AlarmLogRequest, request: Request):
     res = await load_alarm_log_report(data, request)
     rows = res["rows"]
     
-    headers = [
-        "Date", "Time", "Machine", "Train", "Train Type", "Axle No", 
-        "Rolling Stock Zone Code", "Rolling Stock Type", "Rolling Stock No", 
-        "Enroute Diagnosis", "Enroute Action", "Depot Diagnosis", 
-        "MDL (Left)", "ILF (Left)", "MDL (Right)", "ILF (Right)"
-    ]
+    headers = ["Date", "Time", "Machine", "Train", "Location"]
     
     xml_parts = [
         '<?xml version="1.0"?>',
@@ -1808,18 +1749,7 @@ async def export_alarm_log_excel(data: AlarmLogRequest, request: Request):
             f'    <Cell><Data ss:Type="String">{r["alarmTime"]}</Data></Cell>\n'
             f'    <Cell><Data ss:Type="String">{r["machineName"]}</Data></Cell>\n'
             f'    <Cell><Data ss:Type="String">{r["train"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="String">{r["trainType"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="Number">{r["axleNo"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="String">{r["rollingStockZoneCode"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="String">{r["rollingStockType"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="String">{r["rollingStockNumber"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="String">{r["enrouteDiagnosis"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="String">{r["enrouteActionTaken"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="String">{r["depotDiagnosis"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="Number">{r["maximumDynamicLoadLeft"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="Number">{r["impactLoadFactorLeft"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="Number">{r["maximumDynamicLoadRight"]}</Data></Cell>\n'
-            f'    <Cell><Data ss:Type="Number">{r["impactLoadFactorRight"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["location"]}</Data></Cell>\n'
             f'   </Row>'
         )
         
@@ -1862,4 +1792,5 @@ async def update_alert_feedback(alert_id: str, data: FeedbackUpdateRequest, requ
         raise HTTPException(status_code=404, detail="Alert not found")
         
     return {"status": "success", "message": "Feedback updated successfully"}
+
 
