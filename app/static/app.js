@@ -1404,9 +1404,6 @@ function renderTable(rows) {
       <td><strong>${escapeHtml(row.train)}</strong></td>
       <td>${escapeHtml(row.trainType)}</td>
       <td>${row.axleNo}</td>
-      <td>${escapeHtml(row.rollingStockZoneCode)}</td>
-      <td>${escapeHtml(row.rollingStockType)}</td>
-      <td>${escapeHtml(row.rollingStockNumber)}</td>
       <td>${escapeHtml(row.enrouteDiagnosis)}</td>
       <td>${escapeHtml(row.enrouteActionTaken)}</td>
       <td>${escapeHtml(row.depotDiagnosis)}</td>
@@ -1418,7 +1415,7 @@ function renderTable(rows) {
         <button class="table-btn" onclick="showFeedbackModal('${row.id}', '${escapeHtml(row.enrouteDiagnosis)}', '${escapeHtml(row.enrouteActionTaken)}', '${escapeHtml(row.depotDiagnosis)}')">Feedback</button>
       </td>
     </tr>
-  `).join('') : '<tr><td colspan="17">No results found.</td></tr>';
+  `).join('') : '<tr><td colspan="14">No results found.</td></tr>';
 }
 
 function refreshTable() {
