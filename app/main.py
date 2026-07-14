@@ -1833,6 +1833,8 @@ async def load_graph_report(data: GraphDataRequest, request: Request):
                 "timestamp": timestamp_str,
                 "speed": r.get("speedKmph") or 0.0,
                 "positionKm": pos_km,
+                "latitude": r.get("latitude"),
+                "longitude": r.get("longitude"),
                 "axes": axes_data
             })
     else:
@@ -1853,6 +1855,8 @@ async def load_graph_report(data: GraphDataRequest, request: Request):
                 "timestamp": timestamp_str,
                 "speed": r.get("speedKmph") or 0.0,
                 "positionKm": pos_km,
+                "latitude": r.get("latitude"),
+                "longitude": r.get("longitude"),
                 "axes": axes_data
             })
             

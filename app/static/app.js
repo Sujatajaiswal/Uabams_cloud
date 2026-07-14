@@ -1625,8 +1625,6 @@ async function loadGraphData() {
     }
     
     $('metaRollingStockId').textContent = data.rollingStockId;
-    $('metaRollingStockType').textContent = data.rollingStockType;
-    $('metaTrainType').textContent = data.trainType;
     $('metaGraphDateRange').textContent = `${DateUtils.formatDisplayDateTime(fromDate)} → ${DateUtils.formatDisplayDateTime(toDate)}`;
     
     $('graphMetadataSection').style.display = "block";
@@ -1648,7 +1646,35 @@ function renderRollingStockChart(data) {
   }
   
   const selectedAxis = $('graphAxisFilter').value;
-  const labels = data.points.map(p => p.positionKm);
+  
+  let cumulativeDist = 0.0;
+  const labels = [];
+  for (let i = 0; i < data.points.length; i++) {
+    const pt = data.points[i];
+    if (i > 0) {
+      const prev = data.points[i - 1];
+      const p1 = prev.positionKm || 0.0;
+      const p2 = pt.positionKm || 0.0;
+      if (p1 > 0 || p2 > 0) {
+        cumulativeDist = pt.positionKm;
+      } else if (prev.latitude !== null && prev.longitude !== null && pt.latitude !== null && pt.longitude !== null) {
+        const d = haversineDistance(prev.latitude, prev.longitude, pt.latitude, pt.longitude);
+        cumulativeDist += d;
+      }
+    } else {
+      cumulativeDist = pt.positionKm || 0.0;
+    }
+    labels.push(cumulativeDist);
+  }
+  
+  const hasDistance = labels.some(v => v > 0);
+  const formattedLabels = data.points.map((pt, idx) => {
+    if (hasDistance) {
+      return `${labels[idx].toFixed(3)} KM`;
+    }
+    return pt.timestamp.split(" ")[1] || `${idx + 1}`;
+  });
+  
   const speeds = data.points.map(p => p.speed);
   
   let gForces = [];
@@ -1666,7 +1692,7 @@ function renderRollingStockChart(data) {
   rollingStockChartInstance = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: labels.map(km => `${km.toFixed(3)} KM`),
+      labels: formattedLabels,
       datasets: [
         {
           label: gForceLabel,
@@ -1779,7 +1805,7 @@ function renderRollingStockChart(data) {
         x: {
           title: {
             display: true,
-            text: 'Distance along route (KM)',
+            text: hasDistance ? 'Distance along route (KM)' : 'Time of Log',
             font: { family: 'Outfit, Inter, sans-serif', weight: 'bold' }
           },
           ticks: {
@@ -1789,6 +1815,20 @@ function renderRollingStockChart(data) {
       }
     }
   });
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  if (lat1 === undefined || lon1 === undefined || lat2 === undefined || lon2 === undefined) return 0;
+  if (lat1 === null || lon1 === null || lat2 === null || lon2 === null) return 0;
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 function focusLocationOnMap(lat, lon) {

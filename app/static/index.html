@@ -72,7 +72,7 @@
       <button class="tab" data-tab="logs">Logs</button>
       <button class="tab" data-tab="repeated_alarm">Repeated Alarm</button>
       <button class="tab" data-tab="alarm_log_reports">Alarm Log Reports</button>
-      <button class="tab" data-tab="rolling_stock_graph">Rolling Stock Graph</button>
+      <button class="tab" data-tab="rolling_stock_graph">Alert Graph</button>
     </nav>
 
     <section id="overview" class="panel active">
@@ -404,7 +404,7 @@
     <!-- Rolling Stock Graph Panel -->
     <section id="rolling_stock_graph" class="panel">
       <div class="page-header">
-        <h2>Rolling Stock Graph</h2>
+        <h2>Alert Graph</h2>
       </div>
 
       <div class="search-toolbar" style="margin-bottom: 20px;">
@@ -450,26 +450,12 @@
       </div>
 
       <div class="current-result-section" id="graphMetadataSection" style="display:none; margin-bottom: 24px;">
-        <div class="current-result-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="current-result-grid" style="grid-template-columns: repeat(2, 1fr);">
           <div class="result-item">
             <i class="bi bi-cpu result-icon"></i>
             <div class="result-content">
               <span class="result-label">Rolling Stock ID</span>
               <strong id="metaRollingStockId" class="result-value">-</strong>
-            </div>
-          </div>
-          <div class="result-item">
-            <i class="bi bi-tag result-icon"></i>
-            <div class="result-content">
-              <span class="result-label">Rolling Stock Type</span>
-              <strong id="metaRollingStockType" class="result-value">-</strong>
-            </div>
-          </div>
-          <div class="result-item">
-            <i class="bi bi-train-front result-icon"></i>
-            <div class="result-content">
-              <span class="result-label">Train Type</span>
-              <strong id="metaTrainType" class="result-value">-</strong>
             </div>
           </div>
           <div class="result-item">
