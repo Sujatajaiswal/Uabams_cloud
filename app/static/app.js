@@ -1083,6 +1083,7 @@ function formatDateTimeLocal(date) {
 function formatDisplayDateTime(dateString) {
   if (!dateString) return "-";
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
@@ -1094,7 +1095,11 @@ function formatDisplayDateTime(dateString) {
 
 function formatDisplayDate(dateString) {
   if (!dateString) return "-";
+  if (typeof dateString === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(dateString)) {
+    return dateString;
+  }
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
