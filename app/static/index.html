@@ -72,6 +72,7 @@
       <button class="tab" data-tab="logs">Logs</button>
       <button class="tab" data-tab="repeated_alarm">Repeated Alarm</button>
       <button class="tab" data-tab="alarm_log_reports">Alarm Log Reports</button>
+      <button class="tab" data-tab="rolling_stock_graph">Rolling Stock Graph</button>
     </nav>
 
     <section id="overview" class="panel active">
@@ -400,10 +401,99 @@
       </div>
     </section>
 
+    <!-- Rolling Stock Graph Panel -->
+    <section id="rolling_stock_graph" class="panel">
+      <div class="page-header">
+        <h2>Rolling Stock Graph</h2>
+      </div>
+
+      <div class="search-toolbar" style="margin-bottom: 20px;">
+        <div class="toolbar-item">
+          <label for="graphRid">Rolling Stock ID (RID)</label>
+          <input id="graphRid" type="text" class="form-control" placeholder="Enter RID (e.g. TR_002)">
+        </div>
+        <div class="toolbar-item">
+          <label for="graphMetricFilter">Select Metrics</label>
+          <div class="select-wrapper">
+            <select id="graphMetricFilter" class="form-select">
+              <option value="Peak">Peak G-Force</option>
+              <option value="RMS">RMS G-Force</option>
+            </select>
+          </div>
+        </div>
+        <div class="toolbar-item">
+          <label for="graphAxisFilter">Select Axis</label>
+          <div class="select-wrapper">
+            <select id="graphAxisFilter" class="form-select">
+              <option value="all">All Axes (Consolidated Max)</option>
+              <option value="al_x">al_x (Axle Left X)</option>
+              <option value="al_y">al_y (Axle Left Y)</option>
+              <option value="al_z">al_z (Axle Left Z)</option>
+              <option value="ar_x">ar_x (Axle Right X)</option>
+              <option value="ar_y">ar_y (Axle Right Y)</option>
+              <option value="ar_z">ar_z (Axle Right Z)</option>
+              <option value="bg_x">bg_x (Bogie X)</option>
+              <option value="bg_y">bg_y (Bogie Y)</option>
+              <option value="bg_z">bg_z (Bogie Z)</option>
+            </select>
+          </div>
+        </div>
+        <div class="toolbar-item">
+          <label for="graphFromDate">From Date</label>
+          <input id="graphFromDate" type="datetime-local" class="form-control">
+        </div>
+        <div class="toolbar-item">
+          <label for="graphToDate">To Date</label>
+          <input id="graphToDate" type="datetime-local" class="form-control">
+        </div>
+        <button id="loadGraphBtn" class="primary" style="height: 38px;">Load Graph</button>
+      </div>
+
+      <div class="current-result-section" id="graphMetadataSection" style="display:none; margin-bottom: 24px;">
+        <div class="current-result-grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="result-item">
+            <i class="bi bi-cpu result-icon"></i>
+            <div class="result-content">
+              <span class="result-label">Rolling Stock ID</span>
+              <strong id="metaRollingStockId" class="result-value">-</strong>
+            </div>
+          </div>
+          <div class="result-item">
+            <i class="bi bi-tag result-icon"></i>
+            <div class="result-content">
+              <span class="result-label">Rolling Stock Type</span>
+              <strong id="metaRollingStockType" class="result-value">-</strong>
+            </div>
+          </div>
+          <div class="result-item">
+            <i class="bi bi-train-front result-icon"></i>
+            <div class="result-content">
+              <span class="result-label">Train Type</span>
+              <strong id="metaTrainType" class="result-value">-</strong>
+            </div>
+          </div>
+          <div class="result-item">
+            <i class="bi bi-calendar-range result-icon"></i>
+            <div class="result-content">
+              <span class="result-label">Date Range</span>
+              <strong id="metaGraphDateRange" class="result-value">-</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="report-table-card" id="graphCard" style="display:none; padding: 24px;">
+        <div style="width: 100%; position: relative; min-height: 400px; height: 500px;">
+          <canvas id="rollingStockChart"></canvas>
+        </div>
+      </div>
+    </section>
+
     </div>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="/static/app.js?v=20260713-map-alerts-multi-color-v3"></script>
 </body>
 </html>

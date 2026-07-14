@@ -38,7 +38,7 @@ from app.models import (
     GatewayConnectionRequest,
     GatewayConnectionResponse,
 )
-from app.parsers.archive import parse_archive_zip, peak_records_to_alert_events
+from app.parsers.archive import parse_archive_zip, peak_records_to_alert_events, AXIS_NAMES
 
 app = FastAPI(
     title="UABAMS Cloud API",
@@ -1793,9 +1793,83 @@ async def update_alert_feedback(alert_id: str, data: FeedbackUpdateRequest, requ
             }
         }
     )
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Alert not found")
-        
     return {"status": "success", "message": "Feedback updated successfully"}
+
+
+class GraphDataRequest(BaseModel):
+    rid: str
+    fromDate: str
+    toDate: str
+    metric: str  # "Peak" or "RMS"
+
+
+@app.post("/api/reports/graph/load")
+async def load_graph_report(data: GraphDataRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    from_dt = parse_local_datetime(data.fromDate)
+    to_dt = parse_local_datetime(data.toDate)
+    
+    query = {
+        "trainId": data.rid,
+        "createdAt": {"$gte": from_dt, "$lte": to_dt}
+    }
+    
+    points = []
+    if data.metric == "RMS":
+        records = await db.rms_records.find(query).sort("positionMm", 1).to_list(length=1000)
+        for r in records:
+            dt = r.get("createdAt")
+            timestamp_str = dt.strftime("%d-%m-%Y %H:%M:%S") if dt else "-"
+            pos_mm = r.get("positionMm") or 0
+            pos_km = round(pos_mm / 1000000.0, 4)
+            
+            axes_data = {}
+            for axis_name in AXIS_NAMES:
+                axes_data[axis_name] = r.get(f"{axis_name}_g") or 0.0
+                
+            points.append({
+                "timestamp": timestamp_str,
+                "speed": r.get("speedKmph") or 0.0,
+                "positionKm": pos_km,
+                "axes": axes_data
+            })
+    else:
+        records = await db.peak_records.find(query).sort("positionMm", 1).to_list(length=1000)
+        for r in records:
+            dt = r.get("createdAt")
+            timestamp_str = dt.strftime("%d-%m-%Y %H:%M:%S") if dt else "-"
+            pos_mm = r.get("positionMm") or 0
+            pos_km = round(pos_mm / 1000000.0, 4)
+            
+            axes_data = {}
+            axes_dict = r.get("axes", {})
+            for axis_name in AXIS_NAMES:
+                axis_obj = axes_dict.get(axis_name) or {}
+                axes_data[axis_name] = axis_obj.get("peakValueG") or 0.0
+                
+            points.append({
+                "timestamp": timestamp_str,
+                "speed": r.get("speedKmph") or 0.0,
+                "positionKm": pos_km,
+                "axes": axes_data
+            })
+            
+    # Resolve metadata for the selected train
+    rolling_stock_type = "C"
+    train_type = "Goods"
+    if points and data.rid:
+        # Check if train name implies passenger
+        if "LH" in data.rid.upper() or "EXP" in data.rid.upper():
+            train_type = "Passenger LHB"
+            rolling_stock_type = "LHB"
+            
+    return {
+        "rollingStockId": data.rid,
+        "trainType": train_type,
+        "rollingStockType": rolling_stock_type,
+        "points": points
+    }
 
 

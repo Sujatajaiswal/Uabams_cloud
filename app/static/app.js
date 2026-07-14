@@ -8,6 +8,7 @@ const trainMarkers = {};
 let autoRefreshTimer = null;
 let lastLoadedTrainNo = "";
 const recentTrainStorageKey = 'uabams_recent_train_numbers';
+let rollingStockChartInstance = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -1586,12 +1587,209 @@ function initializeReports() {
   $('closeFeedbackModalBtn')?.addEventListener("click", closeFeedbackModal);
   $('submitFeedbackBtn')?.addEventListener("click", submitFeedback);
   
+  DateUtils.initializeDefaultDates("graphFromDate", "graphToDate");
+  DateUtils.applyDateRangeConstraints("graphFromDate", "graphToDate");
+  $('graphFromDate')?.addEventListener("change", () => DateUtils.applyDateRangeConstraints("graphFromDate", "graphToDate"));
+  $('graphToDate')?.addEventListener("change", () => DateUtils.applyDateRangeConstraints("graphFromDate", "graphToDate"));
+  $('loadGraphBtn')?.addEventListener("click", loadGraphData);
+  
   initializeTableSorting();
 }
 
 window.openAlarmLogFor = openAlarmLogFor;
 window.toggleRowDropdown = toggleRowDropdown;
 window.showFeedbackModal = showFeedbackModal;
+window.focusLocationOnMap = focusLocationOnMap;
+
+async function loadGraphData() {
+  const rid = $('graphRid').value.trim();
+  if (!rid) {
+    alert("Please enter a Rolling Stock ID (RID)");
+    return;
+  }
+  const fromDate = $('graphFromDate').value;
+  const toDate = $('graphToDate').value;
+  const metric = $('graphMetricFilter').value;
+  
+  try {
+    const data = await ApiClient.post('/api/reports/graph/load', { rid, fromDate, toDate, metric });
+    if (!data.points || data.points.length === 0) {
+      alert("No telemetry records found for this train and date range.");
+      if (rollingStockChartInstance) {
+        rollingStockChartInstance.destroy();
+        rollingStockChartInstance = null;
+      }
+      $('graphMetadataSection').style.display = "none";
+      $('graphCard').style.display = "none";
+      return;
+    }
+    
+    $('metaRollingStockId').textContent = data.rollingStockId;
+    $('metaRollingStockType').textContent = data.rollingStockType;
+    $('metaTrainType').textContent = data.trainType;
+    $('metaGraphDateRange').textContent = `${DateUtils.formatDisplayDateTime(fromDate)} → ${DateUtils.formatDisplayDateTime(toDate)}`;
+    
+    $('graphMetadataSection').style.display = "block";
+    $('graphCard').style.display = "block";
+    
+    renderRollingStockChart(data);
+  } catch (error) {
+    alert("Load Graph Error: " + error.message);
+  }
+}
+
+function renderRollingStockChart(data) {
+  const canvas = $('rollingStockChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (rollingStockChartInstance) {
+    rollingStockChartInstance.destroy();
+    rollingStockChartInstance = null;
+  }
+  
+  const selectedAxis = $('graphAxisFilter').value;
+  const labels = data.points.map(p => p.positionKm);
+  const speeds = data.points.map(p => p.speed);
+  
+  let gForces = [];
+  let gForceLabel = "";
+  if (selectedAxis === "all") {
+    gForces = data.points.map(p => Math.max(...Object.values(p.axes)));
+    gForceLabel = "Max G-Force (all axes)";
+  } else {
+    gForces = data.points.map(p => p.axes[selectedAxis] ?? 0.0);
+    gForceLabel = `G-Force (${selectedAxis})`;
+  }
+  
+  const pointsCount = data.points.length;
+  
+  rollingStockChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels.map(km => `${km.toFixed(3)} KM`),
+      datasets: [
+        {
+          label: gForceLabel,
+          data: gForces,
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79, 70, 229, 0.05)',
+          yAxisID: 'y',
+          tension: 0.3,
+          borderWidth: 3,
+          pointRadius: pointsCount > 100 ? 0 : 3,
+          fill: true
+        },
+        {
+          label: 'Speed (km/h)',
+          data: speeds,
+          borderColor: '#10b981',
+          backgroundColor: 'transparent',
+          yAxisID: 'y1',
+          tension: 0.3,
+          borderWidth: 2,
+          borderDash: [5, 5],
+          pointRadius: pointsCount > 100 ? 0 : 3,
+          fill: false
+        },
+        {
+          label: 'Maintenance Threshold (50 G)',
+          data: new Array(pointsCount).fill(50),
+          borderColor: '#f59e0b',
+          borderWidth: 2,
+          borderDash: [3, 3],
+          pointRadius: 0,
+          yAxisID: 'y',
+          fill: false
+        },
+        {
+          label: 'Critical Threshold (80 G)',
+          data: new Array(pointsCount).fill(80),
+          borderColor: '#ef4444',
+          borderWidth: 2,
+          borderDash: [3, 3],
+          pointRadius: 0,
+          yAxisID: 'y',
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: {
+            font: {
+              family: 'Outfit, Inter, sans-serif',
+              weight: 'bold'
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            afterLabel: function(context) {
+              if (context.datasetIndex === 0) {
+                const pt = data.points[context.dataIndex];
+                return `Time: ${pt.timestamp}`;
+              }
+              return '';
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: {
+            display: true,
+            text: 'Maximum G-Force (g)',
+            font: { family: 'Outfit, Inter, sans-serif', weight: 'bold' }
+          },
+          min: 0,
+          max: 100,
+          ticks: {
+            font: { family: 'Outfit, Inter, sans-serif' }
+          }
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: {
+            display: true,
+            text: 'Speed (km/h)',
+            font: { family: 'Outfit, Inter, sans-serif', weight: 'bold' }
+          },
+          min: 0,
+          max: 120,
+          grid: {
+            drawOnChartArea: false,
+          },
+          ticks: {
+            font: { family: 'Outfit, Inter, sans-serif' }
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: 'Distance along route (KM)',
+            font: { family: 'Outfit, Inter, sans-serif', weight: 'bold' }
+          },
+          ticks: {
+            font: { family: 'Outfit, Inter, sans-serif' }
+          }
+        }
+      }
+    }
+  });
+}
 
 function focusLocationOnMap(lat, lon) {
   selectTab('alerts');
