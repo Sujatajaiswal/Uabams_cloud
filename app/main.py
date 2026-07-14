@@ -1643,7 +1643,9 @@ async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
     if data.alarmType == "Critical":
         query["alert"] = "RED"
     elif data.alarmType == "Maintenance":
-        query["alert"] = {"$in": ["YELLOW", "GREEN"]}
+        query["alert"] = "YELLOW"
+    elif data.alarmType == "Normal":
+        query["alert"] = "GREEN"
         
     alerts = await db.alert_events.find(query).sort("createdAt", -1).to_list(length=2000)
     
@@ -1651,13 +1653,16 @@ async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
     total_records = len(alerts)
     critical_count = 0
     maintenance_count = 0
+    normal_count = 0
     
     for alert_doc in alerts:
         col_alert = alert_doc.get("alert", "GREEN")
         if col_alert == "RED":
             critical_count += 1
-        else:
+        elif col_alert == "YELLOW":
             maintenance_count += 1
+        else:
+            normal_count += 1
             
         dt = alert_doc.get("createdAt")
         date_str = dt.strftime("%d-%m-%Y") if dt else "-"
@@ -1678,10 +1683,10 @@ async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
         })
         
     summary = {
-        "totalRecords": total_records,
         "totalAlarmCount": total_records,
         "criticalAlarmCount": critical_count,
-        "maintenanceAlarmCount": maintenance_count
+        "maintenanceAlarmCount": maintenance_count,
+        "normalAlarmCount": normal_count
     }
     
     return {

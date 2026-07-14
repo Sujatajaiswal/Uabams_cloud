@@ -1300,21 +1300,26 @@ function renderRepeatedAlarmsTable(rows) {
   const searchVal = $('repSearchRid').value.toLowerCase().trim();
   const filtered = rows.filter(r => !searchVal || r.rid.toLowerCase().includes(searchVal));
   
-  tbody.innerHTML = filtered.length ? filtered.map(row => `
-    <tr>
-      <td><strong>${escapeHtml(row.rid)}</strong></td>
-      <td>${row.count}</td>
-      <td>${escapeHtml(row.location || '-')}</td>
-      <td>
-        <div style="position: relative; display: inline-block;">
-          <button class="dropdown-action-btn" onclick="toggleRowDropdown(event, '${row.rid}')"><i class="bi bi-eye"></i> View <i class="bi bi-chevron-down"></i></button>
-          <div class="export-menu" id="dropdown-${row.rid}" style="top: 28px; min-width: 120px;">
-            <button onclick="openAlarmLogFor('${row.rid}')" style="font-size:12px; padding:8px 12px; font-weight:600; text-align:left;">Alarm Log</button>
+  tbody.innerHTML = filtered.length ? filtered.map(row => {
+    const locLink = row.location && row.location !== '-'
+      ? `<a href="https://www.google.com/maps?q=${encodeURIComponent(row.location)}" target="_blank" style="color: #0d6efd; text-decoration: underline;">${escapeHtml(row.location)}</a>`
+      : '-';
+    return `
+      <tr>
+        <td><strong>${escapeHtml(row.rid)}</strong></td>
+        <td>${row.count}</td>
+        <td>${locLink}</td>
+        <td>
+          <div style="position: relative; display: inline-block;">
+            <button class="dropdown-action-btn" onclick="toggleRowDropdown(event, '${row.rid}')"><i class="bi bi-eye"></i> View <i class="bi bi-chevron-down"></i></button>
+            <div class="export-menu" id="dropdown-${row.rid}" style="top: 28px; min-width: 120px;">
+              <button onclick="openAlarmLogFor('${row.rid}')" style="font-size:12px; padding:8px 12px; font-weight:600; text-align:left;">Alarm Log</button>
+            </div>
           </div>
-        </div>
-      </td>
-    </tr>
-  `).join('') : '<tr><td colspan="4">No results found.</td></tr>';
+        </td>
+      </tr>
+    `;
+  }).join('') : '<tr><td colspan="4">No results found.</td></tr>';
 }
 
 function toggleRowDropdown(event, rid) {
@@ -1361,10 +1366,10 @@ async function loadAlarmLogReport() {
 }
 
 function renderSummary(summary) {
-  $('totalRecordsCard').textContent = summary.totalRecords ?? 0;
-  $('totalAlarmCard').textContent = summary.totalAlarmCount ?? 0;
-  $('criticalAlarmCard').textContent = summary.criticalAlarmCount ?? 0;
-  $('maintenanceAlarmCard').textContent = summary.maintenanceAlarmCount ?? 0;
+  if ($('totalAlarmCard')) $('totalAlarmCard').textContent = summary.totalAlarmCount ?? 0;
+  if ($('criticalAlarmCard')) $('criticalAlarmCard').textContent = summary.criticalAlarmCount ?? 0;
+  if ($('maintenanceAlarmCard')) $('maintenanceAlarmCard').textContent = summary.maintenanceAlarmCount ?? 0;
+  if ($('normalAlarmCard')) $('normalAlarmCard').textContent = summary.normalAlarmCount ?? 0;
 }
 
 function renderCurrentResultSet() {
@@ -1393,15 +1398,20 @@ function renderBanner(data) {
 function renderTable(rows) {
   const tbody = $('alarmLogTableBody');
   if (!tbody) return;
-  tbody.innerHTML = rows.length ? rows.map(row => `
-    <tr>
-      <td>${DateUtils.formatDisplayDate(row.alarmDate)}</td>
-      <td>${row.alarmTime}</td>
-      <td>${escapeHtml(row.machineName)}</td>
-      <td><strong>${escapeHtml(row.train)}</strong></td>
-      <td>${escapeHtml(row.location || '-')}</td>
-    </tr>
-  `).join('') : '<tr><td colspan="5">No results found.</td></tr>';
+  tbody.innerHTML = rows.length ? rows.map(row => {
+    const locLink = row.location && row.location !== '-'
+      ? `<a href="https://www.google.com/maps?q=${encodeURIComponent(row.location)}" target="_blank" style="color: #0d6efd; text-decoration: underline;">${escapeHtml(row.location)}</a>`
+      : '-';
+    return `
+      <tr>
+        <td>${DateUtils.formatDisplayDate(row.alarmDate)}</td>
+        <td>${row.alarmTime}</td>
+        <td>${escapeHtml(row.machineName)}</td>
+        <td><strong>${escapeHtml(row.train)}</strong></td>
+        <td>${locLink}</td>
+      </tr>
+    `;
+  }).join('') : '<tr><td colspan="5">No results found.</td></tr>';
 }
 
 function refreshTable() {

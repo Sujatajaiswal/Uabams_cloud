@@ -293,6 +293,7 @@
               <option value="All">All</option>
               <option value="Critical">Critical</option>
               <option value="Maintenance">Maintenance</option>
+              <option value="Normal">Normal</option>
             </select>
           </div>
         </div>
@@ -301,15 +302,6 @@
 
       <div class="summary-section" id="summarySection">
         <div class="summary-grid" style="grid-template-columns: repeat(4, minmax(150px, 1fr));">
-          <div class="summary-card">
-            <div class="summary-icon total-records-icon">
-              <i class="bi bi-list-columns-reverse"></i>
-            </div>
-            <div class="summary-content">
-              <span class="summary-label">Total Records</span>
-              <strong id="totalRecordsCard" class="summary-value">0</strong>
-            </div>
-          </div>
           <div class="summary-card">
             <div class="summary-icon total-alarms-icon">
               <i class="bi bi-bell"></i>
@@ -335,6 +327,15 @@
             <div class="summary-content">
               <span class="summary-label">Maintenance</span>
               <strong id="maintenanceAlarmCard" class="summary-value">0</strong>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-icon" style="background: #198754;">
+              <i class="bi bi-shield-check"></i>
+            </div>
+            <div class="summary-content">
+              <span class="summary-label">Normal</span>
+              <strong id="normalAlarmCard" class="summary-value">0</strong>
             </div>
           </div>
         </div>
