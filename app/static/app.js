@@ -1301,7 +1301,7 @@ function renderRepeatedAlarmsTable(rows) {
       <td>${row.count}</td>
       <td>
         <div style="position: relative; display: inline-block;">
-          <button class="dropdown-action-btn" onclick="toggleRowDropdown(event, '${row.rid}')">View &or;</button>
+          <button class="dropdown-action-btn" onclick="toggleRowDropdown(event, '${row.rid}')"><i class="bi bi-eye"></i> View <i class="bi bi-chevron-down"></i></button>
           <div class="export-menu" id="dropdown-${row.rid}" style="top: 28px; min-width: 120px;">
             <button onclick="openAlarmLogFor('${row.rid}')" style="font-size:12px; padding:8px 12px; font-weight:600; text-align:left;">Alarm Log</button>
           </div>
