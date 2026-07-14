@@ -1286,7 +1286,7 @@ async function loadRepeatedAlarmReport() {
   const toDate = $('repToDate').value;
   try {
     const data = await ApiClient.post('/api/reports/repeated-alarm/load', { fromDate, toDate });
-    $('repTotalStocksCard').textContent = data.totalRollingStocks ?? 0;
+    if ($('repTotalStocksCard')) $('repTotalStocksCard').textContent = data.totalRollingStocks ?? 0;
     repeatedAlarmsData = data.rows || [];
     renderRepeatedAlarmsTable(repeatedAlarmsData);
   } catch (error) {
