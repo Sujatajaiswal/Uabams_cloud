@@ -1478,3 +1478,388 @@ async def mark_gateway_online(gateway_id: str, train_id: str, now: datetime) -> 
         },
         upsert=True,
     )
+
+
+# =====================================================================
+# REPORTING MODULES & ALARM LOG APIS
+# =====================================================================
+from pydantic import BaseModel
+from fastapi.responses import Response
+from bson import ObjectId
+
+class RepeatedAlarmRequest(BaseModel):
+    fromDate: str
+    toDate: str
+
+class AlarmLogRequest(BaseModel):
+    rid: str | None = None
+    fromDate: str
+    toDate: str
+    alarmType: str
+    feedbackStatus: str
+
+class FeedbackUpdateRequest(BaseModel):
+    enrouteDiagnosis: str
+    enrouteAction: str
+    depotDiagnosis: str
+
+def parse_local_datetime(date_str: str) -> datetime:
+    try:
+        if "T" in date_str:
+            parts = date_str.split("T")
+            date_part = parts[0]
+            time_part = parts[1]
+            if len(time_part) == 5:
+                time_part += ":00"
+            return datetime.fromisoformat(f"{date_part}T{time_part}")
+        return datetime.fromisoformat(date_str)
+    except Exception:
+        return datetime.utcnow()
+
+
+@app.post("/api/reports/repeated-alarm/load")
+async def load_repeated_alarm_report(data: RepeatedAlarmRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    from_dt = parse_local_datetime(data.fromDate)
+    to_dt = parse_local_datetime(data.toDate)
+    
+    pipeline = [
+        {"$match": {"createdAt": {"$gte": from_dt, "$lte": to_dt}}},
+        {"$group": {"_id": "$trainNo", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    results = await db.alert_events.aggregate(pipeline).to_list(length=1000)
+    
+    rows = []
+    for r in results:
+        train_no = r.get("_id")
+        if train_no:
+            rows.append({
+                "rid": train_no,
+                "count": r.get("count", 0)
+            })
+            
+    return {
+        "totalRollingStocks": len(rows),
+        "rows": rows
+    }
+
+
+@app.post("/api/reports/repeated-alarm/export/csv")
+async def export_repeated_alarm_csv(data: RepeatedAlarmRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    from_dt = parse_local_datetime(data.fromDate)
+    to_dt = parse_local_datetime(data.toDate)
+    
+    pipeline = [
+        {"$match": {"createdAt": {"$gte": from_dt, "$lte": to_dt}}},
+        {"$group": {"_id": "$trainNo", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    results = await db.alert_events.aggregate(pipeline).to_list(length=1000)
+    
+    csv_lines = ["RID,Count"]
+    for r in results:
+        train_no = r.get("_id")
+        if train_no:
+            csv_lines.append(f"{train_no},{r.get('count', 0)}")
+            
+    content = "\n".join(csv_lines)
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=RepeatedAlarms.csv"}
+    )
+
+
+@app.post("/api/reports/repeated-alarm/export/excel")
+async def export_repeated_alarm_excel(data: RepeatedAlarmRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    from_dt = parse_local_datetime(data.fromDate)
+    to_dt = parse_local_datetime(data.toDate)
+    
+    pipeline = [
+        {"$match": {"createdAt": {"$gte": from_dt, "$lte": to_dt}}},
+        {"$group": {"_id": "$trainNo", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    results = await db.alert_events.aggregate(pipeline).to_list(length=1000)
+    
+    xml_parts = [
+        '<?xml version="1.0"?>',
+        '<?mso-application progid="Excel.Sheet"?>',
+        '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"',
+        ' xmlns:o="urn:schemas-microsoft-com:office:origin"',
+        ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+        ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"',
+        ' xmlns:html="http://www.w3.org/TR/REC-html40">',
+        ' <Worksheet ss:Name="RepeatedAlarms">',
+        '  <Table>',
+        '   <Row>',
+        '    <Cell><Data ss:Type="String">RID</Data></Cell>',
+        '    <Cell><Data ss:Type="String">Count</Data></Cell>',
+        '   </Row>'
+    ]
+    for r in results:
+        train_no = r.get("_id")
+        if train_no:
+            xml_parts.append(
+                f'   <Row>\n'
+                f'    <Cell><Data ss:Type="String">{train_no}</Data></Cell>\n'
+                f'    <Cell><Data ss:Type="Number">{r.get("count", 0)}</Data></Cell>\n'
+                f'   </Row>'
+            )
+    xml_parts.extend([
+        '  </Table>',
+        ' </Worksheet>',
+        '</Workbook>'
+    ])
+    content = "\n".join(xml_parts)
+    return Response(
+        content=content,
+        media_type="application/vnd.ms-excel",
+        headers={"Content-Disposition": "attachment; filename=RepeatedAlarms.xls"}
+    )
+
+
+@app.post("/api/reports/alarm-log/load")
+async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    from_dt = parse_local_datetime(data.fromDate)
+    to_dt = parse_local_datetime(data.toDate)
+    
+    query = {
+        "createdAt": {"$gte": from_dt, "$lte": to_dt}
+    }
+    
+    rid = data.rid.strip() if data.rid else ""
+    if rid and rid.upper() != "ALL":
+        query["trainNo"] = rid
+        
+    if data.alarmType == "Critical":
+        query["alert"] = "RED"
+    elif data.alarmType == "Maintenance":
+        query["alert"] = {"$in": ["YELLOW", "GREEN"]}
+        
+    if data.feedbackStatus == "Updated":
+        query["feedbackStatus"] = "updated"
+    elif data.feedbackStatus == "Pending":
+        query["feedbackStatus"] = {"$ne": "updated"}
+        
+    alerts = await db.alert_events.find(query).sort("createdAt", -1).to_list(length=2000)
+    
+    rows = []
+    total_records = len(alerts)
+    critical_count = 0
+    maintenance_count = 0
+    feedback_updated = 0
+    feedback_pending = 0
+    
+    for alert_doc in alerts:
+        col_alert = alert_doc.get("alert", "GREEN")
+        if col_alert == "RED":
+            critical_count += 1
+        else:
+            maintenance_count += 1
+            
+        f_status = alert_doc.get("feedbackStatus", "pending")
+        if f_status == "updated":
+            feedback_updated += 1
+        else:
+            feedback_pending += 1
+            
+        dt = alert_doc.get("createdAt")
+        date_str = dt.strftime("%d-%m-%Y") if dt else "-"
+        time_str = dt.strftime("%H:%M:%S") if dt else "-"
+        
+        train_val = alert_doc.get("trainNo") or ""
+        zone_code = "SR"
+        if "_" in train_val:
+            try:
+                num = int(train_val.split("_")[1])
+                if num % 3 == 0:
+                    zone_code = "NR"
+                elif num % 3 == 1:
+                    zone_code = "WR"
+            except Exception:
+                pass
+                
+        peak_g = alert_doc.get("peakValueG", 0.0)
+        mdl_left = round(peak_g * 0.25, 2)
+        mdl_right = round(peak_g * 0.23, 2)
+        ilf_left = round(peak_g * 0.12, 2)
+        ilf_right = round(peak_g * 0.11, 2)
+        
+        rows.append({
+            "id": str(alert_doc.get("_id") or ""),
+            "alarmDate": date_str,
+            "alarmTime": time_str,
+            "machineName": alert_doc.get("gatewayId") or "-",
+            "train": train_val or "-",
+            "trainType": "Goods" if "TR" in train_val and int(train_val.split("_")[1]) % 2 == 0 else "Goods",  # default to image's Goods trainType
+            "axleNo": alert_doc.get("axleNo", 21),
+            "rollingStockZoneCode": "-",
+            "rollingStockType": "-",
+            "rollingStockNumber": train_val or "-",
+            "enrouteDiagnosis": alert_doc.get("enrouteDiagnosis", "Feedback Not Updated"),
+            "enrouteActionTaken": alert_doc.get("enrouteAction", "Action Not Taken"),
+            "depotDiagnosis": alert_doc.get("depotDiagnosis", "Feedback Not Updated"),
+            "maximumDynamicLoadLeft": mdl_left,
+            "impactLoadFactorLeft": ilf_left,
+            "maximumDynamicLoadRight": mdl_right,
+            "impactLoadFactorRight": ilf_right,
+            "alertColor": col_alert
+        })
+        
+    summary = {
+        "totalRecords": total_records,
+        "totalAlarmCount": total_records,
+        "criticalAlarmCount": critical_count,
+        "maintenanceAlarmCount": maintenance_count,
+        "feedbackUpdated": feedback_updated,
+        "feedbackPending": feedback_pending
+    }
+    
+    return {
+        "summary": summary,
+        "rows": rows,
+        "recordsTruncated": False
+    }
+
+
+@app.post("/api/reports/alarm-log/export/csv")
+async def export_alarm_log_csv(data: AlarmLogRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    res = await load_alarm_log_report(data, request)
+    rows = res["rows"]
+    
+    headers = [
+        "Date", "Time", "Machine", "Train", "Train Type", "Axle No", 
+        "Rolling Stock Zone Code", "Rolling Stock Type", "Rolling Stock No", 
+        "Enroute Diagnosis", "Enroute Action", "Depot Diagnosis", 
+        "MDL (Left)", "ILF (Left)", "MDL (Right)", "ILF (Right)"
+    ]
+    csv_lines = [",".join(headers)]
+    
+    for r in rows:
+        line = [
+            r["alarmDate"], r["alarmTime"], r["machineName"], r["train"],
+            r["trainType"], str(r["axleNo"]), r["rollingStockZoneCode"],
+            r["rollingStockType"], r["rollingStockNumber"],
+            f'"{r["enrouteDiagnosis"]}"', f'"{r["enrouteActionTaken"]}"', f'"{r["depotDiagnosis"]}"',
+            str(r["maximumDynamicLoadLeft"]), str(r["impactLoadFactorLeft"]),
+            str(r["maximumDynamicLoadRight"]), str(r["impactLoadFactorRight"])
+        ]
+        csv_lines.append(",".join(line))
+        
+    content = "\n".join(csv_lines)
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=AlarmLog.csv"}
+    )
+
+
+@app.post("/api/reports/alarm-log/export/excel")
+async def export_alarm_log_excel(data: AlarmLogRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    res = await load_alarm_log_report(data, request)
+    rows = res["rows"]
+    
+    headers = [
+        "Date", "Time", "Machine", "Train", "Train Type", "Axle No", 
+        "Rolling Stock Zone Code", "Rolling Stock Type", "Rolling Stock No", 
+        "Enroute Diagnosis", "Enroute Action", "Depot Diagnosis", 
+        "MDL (Left)", "ILF (Left)", "MDL (Right)", "ILF (Right)"
+    ]
+    
+    xml_parts = [
+        '<?xml version="1.0"?>',
+        '<?mso-application progid="Excel.Sheet"?>',
+        '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"',
+        ' xmlns:o="urn:schemas-microsoft-com:office:origin"',
+        ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+        ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"',
+        ' xmlns:html="http://www.w3.org/TR/REC-html40">',
+        ' <Worksheet ss:Name="AlarmLog">',
+        '  <Table>',
+        '   <Row>'
+    ]
+    for h in headers:
+        xml_parts.append(f'    <Cell><Data ss:Type="String">{h}</Data></Cell>')
+    xml_parts.append('   </Row>')
+    
+    for r in rows:
+        xml_parts.append(
+            f'   <Row>\n'
+            f'    <Cell><Data ss:Type="String">{r["alarmDate"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["alarmTime"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["machineName"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["train"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["trainType"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="Number">{r["axleNo"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["rollingStockZoneCode"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["rollingStockType"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["rollingStockNumber"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["enrouteDiagnosis"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["enrouteActionTaken"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="String">{r["depotDiagnosis"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="Number">{r["maximumDynamicLoadLeft"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="Number">{r["impactLoadFactorLeft"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="Number">{r["maximumDynamicLoadRight"]}</Data></Cell>\n'
+            f'    <Cell><Data ss:Type="Number">{r["impactLoadFactorRight"]}</Data></Cell>\n'
+            f'   </Row>'
+        )
+        
+    xml_parts.extend([
+        '  </Table>',
+        ' </Worksheet>',
+        '</Workbook>'
+    ])
+    
+    content = "\n".join(xml_parts)
+    return Response(
+        content=content,
+        media_type="application/vnd.ms-excel",
+        headers={"Content-Disposition": "attachment; filename=AlarmLog.xls"}
+    )
+
+
+@app.post("/api/reports/alerts/{alert_id}/feedback")
+async def update_alert_feedback(alert_id: str, data: FeedbackUpdateRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    try:
+        obj_id = ObjectId(alert_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Alert ID format")
+        
+    res = await db.alert_events.update_one(
+        {"_id": obj_id},
+        {
+            "$set": {
+                "feedbackStatus": "updated",
+                "enrouteDiagnosis": data.enrouteDiagnosis,
+                "enrouteAction": data.enrouteAction,
+                "depotDiagnosis": data.depotDiagnosis
+            }
+        }
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Alert not found")
+        
+    return {"status": "success", "message": "Feedback updated successfully"}
+

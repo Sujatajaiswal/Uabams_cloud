@@ -923,6 +923,8 @@ function selectTab(tabId) {
     setTimeout(() => gatewayIds.forEach((gatewayId) => maps[gatewayId]?.invalidateSize()), 120);
   }
   if (tabId === 'logs') loadLogs();
+  if (tabId === 'repeated_alarm') loadRepeatedAlarmReport();
+  if (tabId === 'alarm_log_reports') loadAlarmLogReport();
 }
 
 function boot() {
@@ -950,6 +952,7 @@ function boot() {
     selectTab(button.dataset.tab);
   }));
   renderGatewayCards(dashboardGatewayIds);
+  initializeReports();
   logBrowserLocation('dashboard_loaded');
 }
 
@@ -960,5 +963,635 @@ window.addEventListener('error', (event) => {
 window.addEventListener('unhandledrejection', (event) => {
   logClientEvent('promise_error', { errorMessage: String(event.reason?.message || event.reason || 'Unhandled promise rejection') });
 });
+
+
+// =====================================================================
+// REPORTING MODULES IMPLEMENTATION
+// =====================================================================
+const APP_CONSTANTS = {
+  DATE: {
+    DEFAULT_DAYS_BACK: 60,
+    MAX_RANGE_DAYS: 365
+  },
+  API: {
+    CONTENT_TYPE_JSON: "application/json"
+  },
+  TABLE: {
+    EMPTY_VALUE: "-"
+  },
+  ERROR_MESSAGES: {
+    EXPORT_CSV_ERROR: "Failed to export CSV file.",
+    EXPORT_EXCEL_ERROR: "Failed to export Excel file."
+  }
+};
+
+globalThis.ApiClient = Object.freeze({
+  async get(url) {
+    const response = await fetch(url);
+    return handleResponse(response);
+  },
+  async post(url, payload) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": APP_CONSTANTS.API.CONTENT_TYPE_JSON
+      },
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(response);
+  }
+});
+
+async function handleResponse(response) {
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+  if (!response.ok) {
+    const message = data?.detail || data?.message || "Server Error";
+    throw new Error(message);
+  }
+  return data;
+}
+
+globalThis.DateUtils = Object.freeze({
+  formatDateTimeLocal,
+  formatDisplayDateTime,
+  formatDisplayDate,
+  initializeDefaultDates,
+  applyDateRangeConstraints,
+  validateDateRange
+});
+
+function initializeDefaultDates(fromId, toId) {
+  const fromInput = $(fromId);
+  const toInput = $(toId);
+  if (!fromInput || !toInput) return;
+  
+  const now = new Date();
+  const fromDate = new Date(now);
+  fromDate.setDate(now.getDate() - APP_CONSTANTS.DATE.DEFAULT_DAYS_BACK);
+  
+  fromInput.value = formatDateTimeLocal(fromDate);
+  toInput.value = formatDateTimeLocal(now);
+}
+
+function applyDateRangeConstraints(fromId, toId) {
+  const fromInput = $(fromId);
+  const toInput = $(toId);
+  if (!fromInput || !toInput) return;
+  
+  const fromValue = fromInput.value;
+  if (!fromValue) return;
+  
+  const fromDate = new Date(fromValue);
+  const maxDate = new Date(fromDate);
+  maxDate.setDate(maxDate.getDate() + APP_CONSTANTS.DATE.MAX_RANGE_DAYS);
+  
+  toInput.min = formatDateTimeLocal(fromDate);
+  toInput.max = formatDateTimeLocal(maxDate);
+  
+  if (toInput.value && new Date(toInput.value) > maxDate) {
+    toInput.value = formatDateTimeLocal(maxDate);
+  }
+}
+
+function validateDateRange(fromId, toId) {
+  const fromInput = $(fromId);
+  const toInput = $(toId);
+  if (!fromInput || !toInput) return false;
+  
+  const fromValue = fromInput.value;
+  const toValue = toInput.value;
+  if (!fromValue || !toValue) return false;
+  
+  const fromDate = new Date(fromValue);
+  const toDate = new Date(toValue);
+  const diffDays = (toDate - fromDate) / (1000 * 60 * 60 * 24);
+  
+  return toDate >= fromDate && diffDays <= APP_CONSTANTS.DATE.MAX_RANGE_DAYS;
+}
+
+function formatDateTimeLocal(date) {
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function formatDisplayDateTime(dateString) {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+}
+
+function formatDisplayDate(dateString) {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+globalThis.ExportUtils = Object.freeze({
+  downloadBlob(blob, fileName) {
+    const url = globalThis.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    globalThis.URL.revokeObjectURL(url);
+  },
+  downloadCsv(csvContent, fileName) {
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    this.downloadBlob(blob, fileName);
+  },
+  extractFilename(response, fallbackName) {
+    const disposition = response.headers.get("Content-Disposition");
+    if (!disposition) return fallbackName;
+    const match = /filename="?([^"]+)"?/.exec(disposition);
+    return match?.[1] || fallbackName;
+  },
+  async downloadResponse(response, fallbackName) {
+    const blob = await response.blob();
+    const fileName = this.extractFilename(response, fallbackName);
+    this.downloadBlob(blob, fileName);
+  }
+});
+
+globalThis.TableSorter = (function () {
+  function sort(records, options = {}) {
+    const { direction = "asc", extractor } = options;
+    if (!Array.isArray(records)) return [];
+    if (typeof extractor !== "function") return [...records];
+    return [...records].sort((left, right) => {
+      const a = extractor(left);
+      const b = extractor(right);
+      return compareValues(a, b, direction);
+    });
+  }
+
+  function compareValues(a, b, direction) {
+    const nullResult = compareNulls(a, b);
+    if (nullResult !== null) return nullResult;
+    const type = detectType(a, b);
+    let result = 0;
+    switch (type) {
+      case "number":
+        result = Number(a) - Number(b);
+        break;
+      case "datetime":
+        result = parseDateTime(a) - parseDateTime(b);
+        break;
+      case "date":
+        result = parseDate(a) - parseDate(b);
+        break;
+      case "time":
+        result = parseTime(a) - parseTime(b);
+        break;
+      default:
+        result = String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+    }
+    return direction === "desc" ? result * -1 : result;
+  }
+
+  function compareNulls(a, b) {
+    const emptyA = isEmpty(a);
+    const emptyB = isEmpty(b);
+    if (emptyA && emptyB) return 0;
+    if (emptyA) return 1;
+    if (emptyB) return -1;
+    return null;
+  }
+
+  function isEmpty(value) {
+    if (value == null) return true;
+    const normalized = String(value).trim().toLowerCase();
+    return (
+      normalized === "" ||
+      normalized === " " ||
+      normalized === "-" ||
+      normalized === "null" ||
+      normalized === "n/a" ||
+      normalized === "feedback not updated" ||
+      normalized === "action not taken"
+    );
+  }
+
+  function detectType(a, b) {
+    const sample = a ?? b;
+    if (sample == null) return "string";
+    if (typeof sample === "number") return "number";
+    const value = String(sample).trim();
+    if (/^-?\d+(\.\d+)?$/.test(value)) return "number";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return "datetime";
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(value)) return "time";
+    if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(value)) return "date";
+    if (/^\d{2}[-/]\d{2}[-/]\d{4}\s+/.test(value)) return "datetime";
+    return "string";
+  }
+
+  function parseDate(value) {
+    const parts = value.replaceAll("/", "-").split("-");
+    return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+  }
+
+  function parseTime(value) {
+    const parts = value.split(":");
+    return Number(parts[0]) * 3600 + Number(parts[1]) * 60 + Number(parts[2] || 0);
+  }
+
+  function parseDateTime(value) {
+    if (value.includes("T")) return new Date(value).getTime();
+    return new Date(value.replace(/^(\d{2})-(\d{2})-(\d{4})/, "$3-$2-$1")).getTime();
+  }
+
+  return { sort };
+})();
+
+globalThis.AlarmLogSort = (function () {
+  let currentSort = {
+    field: "alarmDate",
+    direction: "desc",
+  };
+  return {
+    getCurrentSort: () => currentSort,
+    toggleSort: (field) => {
+      if (currentSort.field === field) {
+        currentSort.direction = currentSort.direction === "asc" ? "desc" : "asc";
+      } else {
+        currentSort.field = field;
+        currentSort.direction = "asc";
+      }
+    },
+    resetSort: () => {
+      currentSort = { field: "alarmDate", direction: "desc" };
+    },
+    applySorting: (rows) => {
+      const sort = currentSort;
+      return TableSorter.sort(rows, {
+        direction: sort.direction,
+        extractor: (row) => row?.[sort.field]
+      });
+    }
+  };
+})();
+
+globalThis.ValidationUtils = Object.freeze({
+  isBlank: (value) => value == null || String(value).trim() === "",
+  validateRequired(fields) {
+    for (const [fieldName, value] of Object.entries(fields)) {
+      if (this.isBlank(value)) {
+        return { valid: false, message: `${fieldName} is required.` };
+      }
+    }
+    return { valid: true, message: null };
+  },
+  validateRid(rid) {
+    if (this.isBlank(rid)) {
+      return { valid: false, message: "RID is required." };
+    }
+    return { valid: true, message: null };
+  },
+  validateDateRange(fromDateId, toDateId) {
+    const valid = DateUtils.validateDateRange(fromDateId, toDateId);
+    if (!valid) {
+      return { valid: false, message: `Date range cannot exceed ${APP_CONSTANTS.DATE.MAX_RANGE_DAYS} days.` };
+    }
+    return { valid: true, message: null };
+  }
+});
+
+let repeatedAlarmsData = [];
+let allRows = [];
+let currentRows = [];
+
+async function loadRepeatedAlarmReport() {
+  const fromDate = $('repFromDate').value;
+  const toDate = $('repToDate').value;
+  try {
+    const data = await ApiClient.post('/api/reports/repeated-alarm/load', { fromDate, toDate });
+    $('repTotalStocksCard').textContent = data.totalRollingStocks ?? 0;
+    repeatedAlarmsData = data.rows || [];
+    renderRepeatedAlarmsTable(repeatedAlarmsData);
+  } catch (error) {
+    alert("Repeated Alarm Load Error: " + error.message);
+  }
+}
+
+function renderRepeatedAlarmsTable(rows) {
+  const tbody = $('repeatedAlarmsTableBody');
+  if (!tbody) return;
+  const searchVal = $('repSearchRid').value.toLowerCase().trim();
+  const filtered = rows.filter(r => !searchVal || r.rid.toLowerCase().includes(searchVal));
+  
+  tbody.innerHTML = filtered.length ? filtered.map(row => `
+    <tr>
+      <td><strong>${escapeHtml(row.rid)}</strong></td>
+      <td>${row.count}</td>
+      <td>
+        <div style="position: relative; display: inline-block;">
+          <button class="dropdown-action-btn" onclick="toggleRowDropdown(event, '${row.rid}')">View &or;</button>
+          <div class="export-menu" id="dropdown-${row.rid}" style="top: 28px; min-width: 120px;">
+            <button onclick="openAlarmLogFor('${row.rid}')" style="font-size:12px; padding:8px 12px; font-weight:600; text-align:left;">Alarm Log</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="3">No results found.</td></tr>';
+}
+
+function toggleRowDropdown(event, rid) {
+  event.stopPropagation();
+  document.querySelectorAll('.export-menu').forEach(el => {
+    if (el.id !== `dropdown-${rid}`) el.classList.remove('show');
+  });
+  const dropdown = $(`dropdown-${rid}`);
+  if (dropdown) dropdown.classList.toggle('show');
+}
+
+function openAlarmLogFor(rid) {
+  $('ridInput').value = rid;
+  $('fromDate').value = $('repFromDate').value;
+  $('toDate').value = $('repToDate').value;
+  selectTab('alarm_log_reports');
+}
+
+async function loadAlarmLogReport() {
+  const request = {
+    rid: $('ridInput').value.trim(),
+    fromDate: $('fromDate').value,
+    toDate: $('toDate').value,
+    alarmType: $('alarmTypeFilter').value,
+    feedbackStatus: $('feedbackStatusFilter').value
+  };
+  try {
+    const data = await ApiClient.post('/api/reports/alarm-log/load', request);
+    renderSummary(data.summary);
+    renderCurrentResultSet();
+    renderBanner(data);
+    
+    allRows = data.rows || [];
+    currentRows = AlarmLogSort.applySorting([...allRows]);
+    updateSortIndicators();
+    renderTable(currentRows);
+    
+    $('summarySection').style.display = "block";
+    $('tableSection').style.display = "block";
+    $('exportToolbar').style.display = "block";
+  } catch (error) {
+    alert("Alarm Log Load Error: " + error.message);
+  }
+}
+
+function renderSummary(summary) {
+  $('totalRecordsCard').textContent = summary.totalRecords ?? 0;
+  $('totalAlarmCard').textContent = summary.totalAlarmCount ?? 0;
+  $('criticalAlarmCard').textContent = summary.criticalAlarmCount ?? 0;
+  $('maintenanceAlarmCard').textContent = summary.maintenanceAlarmCount ?? 0;
+  $('feedbackUpdatedCard').textContent = summary.feedbackUpdated ?? 0;
+  $('feedbackPendingCard').textContent = summary.feedbackPending ?? 0;
+}
+
+function renderCurrentResultSet() {
+  $('currentResultSection').style.display = "block";
+  const rid = $('ridInput').value.trim() || "ALL";
+  const alarmType = $('alarmTypeFilter').value || "ALL";
+  const feedbackStatus = $('feedbackStatusFilter').value || "ALL";
+  const fromDate = $('fromDate').value;
+  const toDate = $('toDate').value;
+  
+  $('currentRid').textContent = rid;
+  $('currentAlarmType').textContent = alarmType;
+  $('currentFeedbackStatus').textContent = feedbackStatus;
+  $('currentDateRange').textContent = `${DateUtils.formatDisplayDateTime(fromDate)} → ${DateUtils.formatDisplayDateTime(toDate)}`;
+}
+
+function renderBanner(data) {
+  const banner = $('recordBanner');
+  if (!banner) return;
+  if (data.recordsTruncated) {
+    banner.style.display = "block";
+    banner.innerHTML = `Displaying first ${data.rows.length} records out of ${data.totalRecords} records. You may continue browsing these records or export the complete dataset using CSV or Excel.`;
+  } else {
+    banner.style.display = "none";
+  }
+}
+
+function renderTable(rows) {
+  const tbody = $('alarmLogTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = rows.length ? rows.map(row => `
+    <tr>
+      <td>${DateUtils.formatDisplayDate(row.alarmDate)}</td>
+      <td>${row.alarmTime}</td>
+      <td>${escapeHtml(row.machineName)}</td>
+      <td><strong>${escapeHtml(row.train)}</strong></td>
+      <td>${escapeHtml(row.trainType)}</td>
+      <td>${row.axleNo}</td>
+      <td>${escapeHtml(row.rollingStockZoneCode)}</td>
+      <td>${escapeHtml(row.rollingStockType)}</td>
+      <td>${escapeHtml(row.rollingStockNumber)}</td>
+      <td>${escapeHtml(row.enrouteDiagnosis)}</td>
+      <td>${escapeHtml(row.enrouteActionTaken)}</td>
+      <td>${escapeHtml(row.depotDiagnosis)}</td>
+      <td>${row.maximumDynamicLoadLeft}</td>
+      <td>${row.impactLoadFactorLeft}</td>
+      <td>${row.maximumDynamicLoadRight}</td>
+      <td>${row.impactLoadFactorRight}</td>
+      <td>
+        <button class="table-btn" onclick="showFeedbackModal('${row.id}', '${escapeHtml(row.enrouteDiagnosis)}', '${escapeHtml(row.enrouteActionTaken)}', '${escapeHtml(row.depotDiagnosis)}')">Feedback</button>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="17">No results found.</td></tr>';
+}
+
+function refreshTable() {
+  currentRows = [...allRows];
+  currentRows = AlarmLogSort.applySorting(currentRows);
+  renderTable(currentRows);
+}
+
+async function exportRepeatedAlarmCsv() {
+  const payload = { fromDate: $('repFromDate').value, toDate: $('repToDate').value };
+  try {
+    const response = await fetch('/api/reports/repeated-alarm/export/csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await ExportUtils.downloadResponse(response, "RepeatedAlarms.csv");
+  } catch (error) {
+    alert("Failed to export Repeated Alarms CSV.");
+  }
+}
+
+async function exportRepeatedAlarmExcel() {
+  const payload = { fromDate: $('repFromDate').value, toDate: $('repToDate').value };
+  try {
+    const response = await fetch('/api/reports/repeated-alarm/export/excel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await ExportUtils.downloadResponse(response, "RepeatedAlarms.xls");
+  } catch (error) {
+    alert("Failed to export Repeated Alarms Excel.");
+  }
+}
+
+async function exportCsv() {
+  const payload = {
+    rid: $('ridInput').value.trim(),
+    fromDate: $('fromDate').value,
+    toDate: $('toDate').value,
+    alarmType: $('alarmTypeFilter').value,
+    feedbackStatus: $('feedbackStatusFilter').value
+  };
+  try {
+    const response = await fetch('/api/reports/alarm-log/export/csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await ExportUtils.downloadResponse(response, "AlarmLog.csv");
+  } catch (error) {
+    alert("Failed to export Alarm Log CSV.");
+  }
+}
+
+async function exportExcel() {
+  const payload = {
+    rid: $('ridInput').value.trim(),
+    fromDate: $('fromDate').value,
+    toDate: $('toDate').value,
+    alarmType: $('alarmTypeFilter').value,
+    feedbackStatus: $('feedbackStatusFilter').value
+  };
+  try {
+    const response = await fetch('/api/reports/alarm-log/export/excel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await ExportUtils.downloadResponse(response, "AlarmLog.xls");
+  } catch (error) {
+    alert("Failed to export Alarm Log Excel.");
+  }
+}
+
+function showFeedbackModal(alertId, enrouteDiagnosis, enrouteAction, depotDiagnosis) {
+  $('feedbackAlertId').value = alertId;
+  $('feedbackEnrouteDiagnosis').value = enrouteDiagnosis === 'Feedback Not Updated' ? '' : enrouteDiagnosis;
+  $('feedbackEnrouteAction').value = enrouteAction === 'Action Not Taken' ? '' : enrouteAction;
+  $('feedbackDepotDiagnosis').value = depotDiagnosis === 'Feedback Not Updated' ? '' : depotDiagnosis;
+  $('feedbackModal').classList.remove('hidden');
+}
+
+function closeFeedbackModal() {
+  $('feedbackModal').classList.add('hidden');
+}
+
+async function submitFeedback() {
+  const alertId = $('feedbackAlertId').value;
+  const payload = {
+    enrouteDiagnosis: $('feedbackEnrouteDiagnosis').value.trim() || 'Feedback Not Updated',
+    enrouteAction: $('feedbackEnrouteAction').value.trim() || 'Action Not Taken',
+    depotDiagnosis: $('feedbackDepotDiagnosis').value.trim() || 'Feedback Not Updated'
+  };
+  try {
+    await ApiClient.post(`/api/reports/alerts/${alertId}/feedback`, payload);
+    closeFeedbackModal();
+    loadAlarmLogReport();
+  } catch (error) {
+    alert("Failed to update feedback: " + error.message);
+  }
+}
+
+function initializeTableSorting() {
+  document.querySelectorAll("#alarmLogTable th[data-field]").forEach((header) => {
+    header.classList.add("sortable-header");
+    header.addEventListener("click", () => {
+      const field = header.dataset.field;
+      AlarmLogSort.toggleSort(field);
+      updateSortIndicators();
+      refreshTable();
+    });
+  });
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll("#alarmLogTable th[data-field]").forEach((header) => {
+    header.classList.remove("sort-asc", "sort-desc");
+  });
+  const sort = AlarmLogSort.getCurrentSort();
+  const activeHeader = document.querySelector(`#alarmLogTable th[data-field="${sort.field}"]`);
+  if (activeHeader) {
+    activeHeader.classList.add(sort.direction === "asc" ? "sort-asc" : "sort-desc");
+  }
+}
+
+function initializeReports() {
+  DateUtils.initializeDefaultDates("repFromDate", "repToDate");
+  DateUtils.initializeDefaultDates("fromDate", "toDate");
+  
+  DateUtils.applyDateRangeConstraints("repFromDate", "repToDate");
+  DateUtils.applyDateRangeConstraints("fromDate", "toDate");
+  
+  $('repFromDate')?.addEventListener("change", () => DateUtils.applyDateRangeConstraints("repFromDate", "repToDate"));
+  $('repToDate')?.addEventListener("change", () => DateUtils.applyDateRangeConstraints("repFromDate", "repToDate"));
+  $('fromDate')?.addEventListener("change", () => DateUtils.applyDateRangeConstraints("fromDate", "toDate"));
+  $('toDate')?.addEventListener("change", () => DateUtils.applyDateRangeConstraints("fromDate", "toDate"));
+  
+  $('repLoadReportBtn')?.addEventListener("click", loadRepeatedAlarmReport);
+  $('loadReportBtn')?.addEventListener("click", loadAlarmLogReport);
+  
+  $('repSearchRid')?.addEventListener("input", () => renderRepeatedAlarmsTable(repeatedAlarmsData));
+  
+  $('repExportBtn')?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    $('repExportMenu').classList.toggle('show');
+  });
+  
+  const alarmLogExportBtn = document.querySelector('#exportToolbar .export-btn');
+  const alarmLogExportMenu = document.querySelector('#exportToolbar .export-menu');
+  alarmLogExportBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    alarmLogExportMenu?.classList.toggle('show');
+  });
+  
+  document.addEventListener("click", () => {
+    $('repExportMenu')?.classList.remove('show');
+    alarmLogExportMenu?.classList.remove('show');
+    document.querySelectorAll('.export-menu').forEach(el => {
+      if (!el.id.startsWith('repExport') && !el.closest('#exportToolbar')) el.classList.remove('show');
+    });
+  });
+  
+  $('repExportCsvBtn')?.addEventListener("click", exportRepeatedAlarmCsv);
+  $('repExportExcelBtn')?.addEventListener("click", exportRepeatedAlarmExcel);
+  $('exportCsvBtn')?.addEventListener("click", exportCsv);
+  $('exportExcelBtn')?.addEventListener("click", exportExcel);
+  
+  $('closeFeedbackModalBtn')?.addEventListener("click", closeFeedbackModal);
+  $('submitFeedbackBtn')?.addEventListener("click", submitFeedback);
+  
+  initializeTableSorting();
+}
+
+window.openAlarmLogFor = openAlarmLogFor;
+window.toggleRowDropdown = toggleRowDropdown;
+window.showFeedbackModal = showFeedbackModal;
+
 
 boot();
