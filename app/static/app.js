@@ -536,8 +536,9 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
     drawColoredRoute(layer, routePoints);
 
     alertPoints.forEach((point, index) => {
-      const markerPoint = jitterPoint(point.lat, point.lon, index);
       const severity = normalizeAlert(point.color);
+      if (severity !== 'RED') return;
+      const markerPoint = jitterPoint(point.lat, point.lon, index);
       L.circleMarker(markerPoint, {
         radius: 13,
         color: '#111827',
@@ -549,9 +550,10 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
         .bindPopup(routePopup(point));
     });
 
+    const redAlertPoints = alertPoints.filter(point => normalizeAlert(point.color) === 'RED');
     const bounds = L.latLngBounds([
       ...routePoints.map((point) => [Number(point.lat), Number(point.lon)]),
-      ...alertPoints.map((point, index) => jitterPoint(point.lat, point.lon, index)),
+      ...redAlertPoints.map((point, index) => jitterPoint(point.lat, point.lon, index)),
     ]);
     if (bounds.isValid()) {
       map.fitBounds(bounds.pad(selectedGateway ? 0.3 : 0.2), { maxZoom: 16 });
@@ -1302,7 +1304,7 @@ function renderRepeatedAlarmsTable(rows) {
   
   tbody.innerHTML = filtered.length ? filtered.map(row => {
     const locLink = row.location && row.location !== '-'
-      ? `<a href="https://www.google.com/maps?q=${encodeURIComponent(row.location)}" target="_blank" style="color: #0d6efd; text-decoration: underline;">${escapeHtml(row.location)}</a>`
+      ? `<a href="javascript:void(0)" onclick="focusLocationOnMap(${row.location})" style="color: #0d6efd; text-decoration: underline;">${escapeHtml(row.location)}</a>`
       : '-';
     return `
       <tr>
@@ -1400,7 +1402,7 @@ function renderTable(rows) {
   if (!tbody) return;
   tbody.innerHTML = rows.length ? rows.map(row => {
     const locLink = row.location && row.location !== '-'
-      ? `<a href="https://www.google.com/maps?q=${encodeURIComponent(row.location)}" target="_blank" style="color: #0d6efd; text-decoration: underline;">${escapeHtml(row.location)}</a>`
+      ? `<a href="javascript:void(0)" onclick="focusLocationOnMap(${row.location})" style="color: #0d6efd; text-decoration: underline;">${escapeHtml(row.location)}</a>`
       : '-';
     return `
       <tr>
@@ -1590,6 +1592,20 @@ function initializeReports() {
 window.openAlarmLogFor = openAlarmLogFor;
 window.toggleRowDropdown = toggleRowDropdown;
 window.showFeedbackModal = showFeedbackModal;
+
+function focusLocationOnMap(lat, lon) {
+  selectTab('alerts');
+  setTimeout(() => {
+    Object.keys(maps).forEach(gatewayId => {
+      const map = maps[gatewayId];
+      if (map) {
+        map.setView([lat, lon], 14);
+        map.invalidateSize();
+      }
+    });
+  }, 150);
+}
+window.focusLocationOnMap = focusLocationOnMap;
 
 
 boot();
