@@ -1,4 +1,4 @@
-const state = { dashboard: null, rmsPoints: [], mapAlerts: [], selectedGateway: '' };
+const state = { dashboard: null, rmsPoints: [], mapAlerts: [], selectedGateway: '', selectedDateFilter: null };
 const defaultGatewayIds = ['GW_UABAMS_BOGIE_01', 'GW_UABAMS_BOGIE_02'];
 const gatewayIds = defaultGatewayIds;
 let dashboardGatewayIds = [...defaultGatewayIds];
@@ -347,11 +347,17 @@ function renderDashboard(data) {
   state.selectedGateway = selectedGateway;
   const train = data.train || {};
   const gateways = data.gateways || [];
-  const alerts = data.lastAlerts || [];
+  let alerts = data.lastAlerts || [];
   const archives = data.archives || [];
   const activeSession = data.activeSession;
   const rmsPoints = data.rmsPoints || [];
-  const mapAlerts = data.mapAlerts || alerts.map(dashboardAlertToMapPoint);
+  let mapAlerts = data.mapAlerts || alerts.map(dashboardAlertToMapPoint);
+
+  if (state.selectedDateFilter) {
+    alerts = alerts.filter(item => getItemDateStr(item) === state.selectedDateFilter);
+    mapAlerts = mapAlerts.filter(item => getItemDateStr(item) === state.selectedDateFilter);
+  }
+
   const allGatewayIds = dashboardGatewayIds;
   const viewGatewayIds = visibleGatewayIds();
   const allGateways = gateways.filter((gw) => allGatewayIds.includes(gw.gatewayId));
@@ -399,6 +405,30 @@ function renderDashboard(data) {
   renderArchives(viewArchives);
   renderSession(activeSession, train.trainNo);
   renderMaps(viewAlerts, gateways, viewRmsPoints, viewMapAlerts);
+}
+
+function getItemDateStr(item) {
+  if (!item) return null;
+  const rawDate = item.createdAt || item.receivedAt;
+  if (!rawDate) return null;
+  try {
+    const parts = String(rawDate).split('T');
+    const datePart = parts[0];
+    if (datePart.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return datePart;
+    }
+  } catch (e) {}
+  
+  try {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {}
+  return null;
 }
 function renderAlertSummary(alerts) {
   const red = alerts.filter((alert) => alert.alert === 'RED').length;
@@ -954,6 +984,31 @@ function boot() {
     logClientEvent('tab_change', { message: button.dataset.tab });
     selectTab(button.dataset.tab);
   }));
+  $('mapDateFilter')?.addEventListener('change', () => {
+    state.selectedDateFilter = $('mapDateFilter').value || null;
+    if (state.dashboard) renderDashboard(state.dashboard);
+  });
+  $('mapDateTodayBtn')?.addEventListener('click', () => {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    $('mapDateFilter').value = todayStr;
+    state.selectedDateFilter = todayStr;
+    if (state.dashboard) renderDashboard(state.dashboard);
+  });
+  $('mapDateYesterdayBtn')?.addEventListener('click', () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const yesterdayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    $('mapDateFilter').value = yesterdayStr;
+    state.selectedDateFilter = yesterdayStr;
+    if (state.dashboard) renderDashboard(state.dashboard);
+  });
+  $('mapDateAllBtn')?.addEventListener('click', () => {
+    $('mapDateFilter').value = '';
+    state.selectedDateFilter = null;
+    if (state.dashboard) renderDashboard(state.dashboard);
+  });
+
   renderGatewayCards(dashboardGatewayIds);
   initializeReports();
   logBrowserLocation('dashboard_loaded');

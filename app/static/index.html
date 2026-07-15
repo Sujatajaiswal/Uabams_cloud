@@ -129,6 +129,19 @@
 
     <section id="alerts" class="panel">
       <div class="section-head"><h2>OpenStreetMap Alert View</h2></div>
+      
+      <div class="search-toolbar" style="margin-bottom: 20px; gap: 10px;">
+        <div class="toolbar-item" style="min-width: 160px; margin-bottom: 0;">
+          <label for="mapDateFilter" style="font-size: 13px; font-weight: 700; color: #495057;">Filter by Date</label>
+          <input id="mapDateFilter" type="date" class="form-control" style="height: 34px; padding: 0 8px;">
+        </div>
+        <div class="toolbar-item" style="display: flex; flex-direction: row; gap: 6px; align-items: flex-end; margin-bottom: 0;">
+          <button id="mapDateTodayBtn" class="secondary" style="height: 34px; padding: 0 12px; font-size: 13px;">Today</button>
+          <button id="mapDateYesterdayBtn" class="secondary" style="height: 34px; padding: 0 12px; font-size: 13px;">Yesterday</button>
+          <button id="mapDateAllBtn" class="secondary" style="height: 34px; padding: 0 12px; font-size: 13px;">Show All</button>
+        </div>
+      </div>
+
       <div class="alert-summary-grid">
         <div class="alert-summary total"><span>Total Alerts</span><strong id="alertTotal">0</strong></div>
         <div class="alert-summary red"><span>Red Alerts</span><strong id="alertRed">0</strong></div>
