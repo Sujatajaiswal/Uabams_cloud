@@ -51,8 +51,8 @@
   <main class="layout">
     <section class="toolbar gateway-toolbar" aria-label="Train and gateway selector">
       <label>
-        Search Train No
-        <input id="trainNo" type="text" value="" placeholder="Enter train number" autocomplete="off" list="recentTrainNos">
+        Search Train No / Name
+        <input id="trainNo" type="text" value="" placeholder="Enter train number or name" autocomplete="off" list="recentTrainNos">
         <datalist id="recentTrainNos"></datalist>
       </label>
       <label>
@@ -77,7 +77,7 @@
 
     <section id="overview" class="panel active">
       <div class="summary-grid">
-        <div class="metric"><span>Train No</span><strong id="summaryTrain">-</strong></div>
+        <div class="metric"><span>Train No / Name</span><strong id="summaryTrain">-</strong></div>
         <div class="metric"><span>Status</span><strong id="summaryStatus">-</strong></div>
         <div class="metric"><span>Gateways Online</span><strong id="summaryGateways">-</strong></div>
         <div class="metric"><span>Last Data</span><strong id="summaryLastData">-</strong></div>

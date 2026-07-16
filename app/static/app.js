@@ -99,24 +99,30 @@ function renderRecentTrainNumbers() {
 
   if (!list || !input) return;
 
-  const localTrains = recentTrainNumbers();
-  const renderList = (allTrains) => {
-    list.innerHTML = allTrains
-      .map((trainNo) => `<option value="${escapeHtml(trainNo)}"></option>`)
+  const localTrainNos = recentTrainNumbers();
+  
+  const renderList = (trainObjects) => {
+    list.innerHTML = trainObjects
+      .map((t) => {
+        const label = t.trainName ? `${t.trainNo} - ${t.trainName}` : t.trainNo;
+        return `<option value="${escapeHtml(t.trainNo)}">${escapeHtml(label)}</option>`;
+      })
       .join('');
-    if (allTrains.length > 0 && !input.value) {
-      input.value = allTrains[0];
+    if (trainObjects.length > 0 && !input.value) {
+      input.value = trainObjects[0].trainNo;
     }
   };
 
-  renderList(localTrains);
+  renderList(localTrainNos.map(no => ({ trainNo: no, trainName: '' })));
 
   fetch('/api/v1/trains')
     .then((res) => res.json())
     .then((serverTrains) => {
       if (Array.isArray(serverTrains)) {
-        const combined = Array.from(new Set([...localTrains, ...serverTrains]));
-        renderList(combined);
+        const map = new Map();
+        localTrainNos.forEach(no => map.set(no, { trainNo: no, trainName: '' }));
+        serverTrains.forEach(t => map.set(t.trainNo, t));
+        renderList(Array.from(map.values()));
       }
     })
     .catch((err) => console.error('Failed to load train list:', err));
@@ -367,7 +373,10 @@ function renderDashboard(data) {
   const viewMapAlerts = mapAlerts.filter((point) => gatewayMatches(point, selectedGateway));
   const onlineCount = allGatewayIds.filter((gatewayId) => gateways.find((gw) => gw.gatewayId === gatewayId)?.online).length;
   const criticalCount = alerts.filter((alert) => alert.alert === 'RED').length;
-  setText('summaryTrain', train.trainNo || '-');
+  const trainDisplayName = train.trainName 
+    ? `${train.trainNo} - ${train.trainName}`
+    : train.trainNo || '-';
+  setText('summaryTrain', trainDisplayName);
   setText('summaryStatus', train.status || '-');
   setText('summaryGateways', `${onlineCount}/${allGatewayIds.length || 0}`);
   setText('summaryLastData', formatDate(lastDataTime(train, allGateways, alerts, archives)));

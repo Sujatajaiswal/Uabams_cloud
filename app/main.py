@@ -1098,9 +1098,36 @@ async def save_calibration(
 
 @app.get("/api/v1/trains")
 async def list_trains():
-    trains_cursor = db.trains.find({}, {"_id": 0, "trainNo": 1})
+    trains_cursor = db.trains.find({}, {"_id": 0, "trainNo": 1, "trainName": 1})
     trains = await trains_cursor.to_list(length=1000)
-    return sorted(list(set([t["trainNo"] for t in trains if t.get("trainNo")])))
+    
+    unique_trains = {}
+    for t in trains:
+        no = t.get("trainNo")
+        if not no:
+            continue
+        name = t.get("trainName") or ""
+        if not name:
+            if no == "019456":
+                name = "Gatimaan Express"
+            elif "TR_" in no:
+                try:
+                    num = int(no.split("_")[1])
+                    names_pool = [
+                        "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
+                        "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
+                        "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
+                    ]
+                    name = names_pool[num % len(names_pool)]
+                except Exception:
+                    name = "Express Train"
+            else:
+                name = "Express Train"
+        unique_trains[no] = {
+            "trainNo": no,
+            "trainName": name
+        }
+    return sorted(list(unique_trains.values()), key=lambda x: x["trainNo"])
 
 
 @app.get("/api/v1/trains/{train_no}/dashboard")
@@ -1108,7 +1135,24 @@ async def train_dashboard(train_no: str):
     train = await db.trains.find_one({"trainNo": train_no})
     if not train:
         raise HTTPException(status_code=404, detail="Train not found")
-
+        
+    if not train.get("trainName"):
+        if train_no == "019456":
+            train["trainName"] = "Gatimaan Express"
+        elif "TR_" in train_no:
+            try:
+                num = int(train_no.split("_")[1])
+                names_pool = [
+                    "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
+                    "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
+                    "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
+                ]
+                train["trainName"] = names_pool[num % len(names_pool)]
+            except Exception:
+                train["trainName"] = "Express Train"
+        else:
+            train["trainName"] = "Express Train"
+            
     expected_gateways = ["GW_UABAMS_BOGIE_01", "GW_UABAMS_BOGIE_02"]
     gateway_ids = list(dict.fromkeys([*expected_gateways, *train.get("gateways", [])]))
     statuses = await db.gateway_status.find({"gatewayId": {"$in": gateway_ids}}).to_list(length=20)
@@ -1125,11 +1169,11 @@ async def train_dashboard(train_no: str):
                 "online": False,
                 "lastHeartbeat": None,
             })
-
+            
     alerts = await db.alert_events.find({"trainNo": train_no, "sessionStatus": {"$ne": "archived"}}).sort("createdAt", -1).limit(30).to_list(length=30)
     archives = await db.archives.find({"trainId": train_no}).sort("receivedAt", -1).limit(20).to_list(length=20)
     active_session = await db.sessions.find_one({"trainNo": train_no, "status": "active"}, sort=[("createdAt", -1)])
-
+    
     return {
         "train": serialize(train),
         "gateways": serialize(gateway_cards),
