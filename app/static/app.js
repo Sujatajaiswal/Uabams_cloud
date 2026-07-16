@@ -2122,51 +2122,45 @@ function renderRollingStockChart(data) {
     formattedLabels, zData, '#3b82f6', speeds, thresholdRed, thresholdYellow, thresholdGreen, hasDistance, data.points
   );
 
-  // Calculate peaks and anomaly counts for the sidebar
-  let maxSpeed = 0;
-  let maxForceX = 0;
-  let maxForceY = 0;
-  let maxForceZ = 0;
-  
-  let criticalCount = 0;
-  let warningCount = 0;
-  let normalCount = 0;
+  // Calculate alert counts for each axis separately
+  let critX = 0, warnX = 0, normX = 0;
+  let critY = 0, warnY = 0, normY = 0;
+  let critZ = 0, warnZ = 0, normZ = 0;
 
   for (let i = 0; i < data.points.length; i++) {
     const pt = data.points[i];
     const x = pt.axes[`${prefix}_x`] ?? 0.0;
     const y = pt.axes[`${prefix}_y`] ?? 0.0;
     const z = pt.axes[`${prefix}_z`] ?? 0.0;
-    const sp = pt.speed ?? 0.0;
     
-    if (sp > maxSpeed) maxSpeed = sp;
-    if (x > maxForceX) maxForceX = x;
-    if (y > maxForceY) maxForceY = y;
-    if (z > maxForceZ) maxForceZ = z;
-    
-    const maxVal = Math.max(x, y, z);
-    if (maxVal >= thresholdRed) {
-      criticalCount++;
-    } else if (maxVal >= thresholdYellow) {
-      warningCount++;
-    } else {
-      normalCount++;
-    }
+    // X Axis Alerts
+    if (x >= thresholdRed) critX++;
+    else if (x >= thresholdYellow) warnX++;
+    else normX++;
+
+    // Y Axis Alerts
+    if (y >= thresholdRed) critY++;
+    else if (y >= thresholdYellow) warnY++;
+    else normY++;
+
+    // Z Axis Alerts
+    if (z >= thresholdRed) critZ++;
+    else if (z >= thresholdYellow) warnZ++;
+    else normZ++;
   }
 
   // Populate sidebar indicators
-  setText('sbAlertCriticalCount', criticalCount);
-  setText('sbAlertWarningCount', warningCount);
-  setText('sbAlertNormalCount', normalCount);
-  
-  setText('sbMaxForceX', `${maxForceX.toFixed(2)} G`);
-  setText('sbMaxForceY', `${maxForceY.toFixed(2)} G`);
-  setText('sbMaxForceZ', `${maxForceZ.toFixed(2)} G`);
-  setText('sbMaxSpeed', `${Math.round(maxSpeed)} km/h`);
-  
-  setText('sbTotalPoints', data.points.length);
-  setText('sbCritThreshold', `${thresholdRed.toFixed(1)} G`);
-  setText('sbWarnThreshold', `${thresholdYellow.toFixed(1)} G`);
+  setText('sbCriticalX', critX);
+  setText('sbWarningX', warnX);
+  setText('sbNormalX', normX);
+
+  setText('sbCriticalY', critY);
+  setText('sbWarningY', warnY);
+  setText('sbNormalY', normY);
+
+  setText('sbCriticalZ', critZ);
+  setText('sbWarningZ', warnZ);
+  setText('sbNormalZ', normZ);
 }
 
 function haversineDistance(lat1, lon1, lat2, lon2) {

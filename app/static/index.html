@@ -514,62 +514,61 @@
         </div>
 
         <div class="report-table-card" id="graphSidebar" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; background: #111827; border: 1px solid #1f2937; border-radius: 8px;">
-          <h3 style="font-size: 15px; font-weight: bold; border-bottom: 1px solid #1f2937; padding-bottom: 10px; margin-bottom: 5px; color: #f9fafb;">Analysis Sidebar</h3>
+          <h3 style="font-size: 15px; font-weight: bold; border-bottom: 1px solid #1f2937; padding-bottom: 10px; margin-bottom: 5px; color: #f9fafb;">Alert Summary</h3>
           
+          <!-- X Axis Alerts -->
           <div class="sidebar-section">
-            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Alert Summary</h4>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; border-radius: 4px;">
-                <span style="font-weight: bold; color: #fca5a5; font-size: 11px;">Critical (Red)</span>
-                <span id="sbAlertCriticalCount" style="font-size: 13px; font-weight: bold; color: #ef4444;">0</span>
+            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">X Axis Alerts</h4>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(239, 68, 68, 0.06); border-left: 3px solid #ef4444; border-radius: 4px; font-size: 11px;">
+                <span style="color: #fca5a5;">Critical (Red)</span>
+                <strong id="sbCriticalX" style="color: #ef4444;">0</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(245, 158, 11, 0.08); border-left: 4px solid #f59e0b; border-radius: 4px;">
-                <span style="font-weight: bold; color: #fde047; font-size: 11px;">Warning (Yellow)</span>
-                <span id="sbAlertWarningCount" style="font-size: 13px; font-weight: bold; color: #f59e0b;">0</span>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(245, 158, 11, 0.06); border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 11px;">
+                <span style="color: #fde047;">Warning (Yellow)</span>
+                <strong id="sbWarningX" style="color: #f59e0b;">0</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(16, 185, 129, 0.08); border-left: 4px solid #10b981; border-radius: 4px;">
-                <span style="font-weight: bold; color: #a7f3d0; font-size: 11px;">Normal (Green)</span>
-                <span id="sbAlertNormalCount" style="font-size: 13px; font-weight: bold; color: #10b981;">0</span>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(16, 185, 129, 0.06); border-left: 3px solid #10b981; border-radius: 4px; font-size: 11px;">
+                <span style="color: #a7f3d0;">Normal (Green)</span>
+                <strong id="sbNormalX" style="color: #10b981;">0</strong>
               </div>
             </div>
           </div>
           
+          <!-- Y Axis Alerts -->
           <div class="sidebar-section">
-            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Peak Telemetry</h4>
-            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px; color: #d1d5db;">
-              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
-                <span>Max G-Force X:</span>
-                <strong id="sbMaxForceX" style="color: #ef4444;">0.00 G</strong>
+            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Y Axis Alerts</h4>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(239, 68, 68, 0.06); border-left: 3px solid #ef4444; border-radius: 4px; font-size: 11px;">
+                <span style="color: #fca5a5;">Critical (Red)</span>
+                <strong id="sbCriticalY" style="color: #ef4444;">0</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
-                <span>Max G-Force Y:</span>
-                <strong id="sbMaxForceY" style="color: #10b981;">0.00 G</strong>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(245, 158, 11, 0.06); border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 11px;">
+                <span style="color: #fde047;">Warning (Yellow)</span>
+                <strong id="sbWarningY" style="color: #f59e0b;">0</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
-                <span>Max G-Force Z:</span>
-                <strong id="sbMaxForceZ" style="color: #3b82f6;">0.00 G</strong>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding-bottom: 2px;">
-                <span>Max Speed:</span>
-                <strong id="sbMaxSpeed" style="color: #f3f4f6;">0 km/h</strong>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(16, 185, 129, 0.06); border-left: 3px solid #10b981; border-radius: 4px; font-size: 11px;">
+                <span style="color: #a7f3d0;">Normal (Green)</span>
+                <strong id="sbNormalY" style="color: #10b981;">0</strong>
               </div>
             </div>
           </div>
 
+          <!-- Z Axis Alerts -->
           <div class="sidebar-section">
-            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Configuration</h4>
-            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px; color: #d1d5db;">
-              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
-                <span>Total Data Points:</span>
-                <strong id="sbTotalPoints" style="color: #f3f4f6;">0</strong>
+            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Z Axis Alerts</h4>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(239, 68, 68, 0.06); border-left: 3px solid #ef4444; border-radius: 4px; font-size: 11px;">
+                <span style="color: #fca5a5;">Critical (Red)</span>
+                <strong id="sbCriticalZ" style="color: #ef4444;">0</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
-                <span>Critical Limit:</span>
-                <strong id="sbCritThreshold" style="color: #ef4444;">8.0 G</strong>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(245, 158, 11, 0.06); border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 11px;">
+                <span style="color: #fde047;">Warning (Yellow)</span>
+                <strong id="sbWarningZ" style="color: #f59e0b;">0</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; padding-bottom: 2px;">
-                <span>Warning Limit:</span>
-                <strong id="sbWarnThreshold" style="color: #f59e0b;">5.0 G</strong>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: rgba(16, 185, 129, 0.06); border-left: 3px solid #10b981; border-radius: 4px; font-size: 11px;">
+                <span style="color: #a7f3d0;">Normal (Green)</span>
+                <strong id="sbNormalZ" style="color: #10b981;">0</strong>
               </div>
             </div>
           </div>
@@ -584,6 +583,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <script src="/static/app.js?v=20260716-graph-sidebar-v1"></script>
+  <script src="/static/app.js?v=20260716-axis-alerts-v1"></script>
 </body>
 </html>
