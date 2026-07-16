@@ -80,9 +80,12 @@ function gatewayLabel(gatewayId) {
 }
 
 function trainNoValue() {
-  const rawVal = $('trainNo')?.value.trim() || '';
+  let rawVal = $('trainNo')?.value.trim() || '';
   if (rawVal.includes(' - ')) {
-    return rawVal.split(' - ')[0].trim();
+    rawVal = rawVal.split(' - ')[0].trim();
+  }
+  if (/^\d{3}$/.test(rawVal)) {
+    return 'TR_' + rawVal;
   }
   return rawVal;
 }
@@ -93,10 +96,16 @@ function recentTrainNumbers() {
     const values = JSON.parse(localStorage.getItem(recentTrainStorageKey) || '[]');
     if (!Array.isArray(values)) return [];
     return values.map(val => {
+      let no = '';
       if (typeof val === 'object' && val !== null) {
-        return val.trainNo || '';
+        no = val.trainNo || '';
+      } else {
+        no = String(val || '');
       }
-      return String(val || '');
+      if (no.startsWith('TR_')) {
+        no = no.replace('TR_', '');
+      }
+      return no;
     })
     .filter(val => val && val !== 'object Object' && val !== '[object Object]');
   } catch {

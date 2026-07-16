@@ -1123,8 +1123,10 @@ async def list_trains():
                     name = "Express Train"
             else:
                 name = "Express Train"
-        unique_trains[no] = {
-            "trainNo": no,
+        
+        display_no = no.replace("TR_", "") if no.startswith("TR_") else no
+        unique_trains[display_no] = {
+            "trainNo": display_no,
             "trainName": name
         }
     return sorted(list(unique_trains.values()), key=lambda x: x["trainNo"])
@@ -1174,8 +1176,12 @@ async def train_dashboard(train_no: str):
     archives = await db.archives.find({"trainId": train_no}).sort("receivedAt", -1).limit(20).to_list(length=20)
     active_session = await db.sessions.find_one({"trainNo": train_no, "status": "active"}, sort=[("createdAt", -1)])
     
+    display_train = dict(train)
+    if display_train.get("trainNo", "").startswith("TR_"):
+        display_train["trainNo"] = display_train["trainNo"].replace("TR_", "")
+
     return {
-        "train": serialize(train),
+        "train": serialize(display_train),
         "gateways": serialize(gateway_cards),
         "lastAlerts": serialize(alerts),
         "archives": serialize(archives),
