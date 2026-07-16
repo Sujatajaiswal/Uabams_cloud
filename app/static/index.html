@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="/static/styles.css?v=20260716-colored-alerts-v1">
 </head>
 <body>
+  <!-- Dummy inputs to capture aggressive browser autofill -->
+  <input type="text" style="display:none;" autocomplete="username">
+  <input type="password" style="display:none;" autocomplete="current-password">
   <header class="app-header">
     <div class="brand-box">
       <img src="/static/railman-logo.png" class="header-logo" alt="RailMan Logo">
@@ -52,7 +55,7 @@
     <section class="toolbar gateway-toolbar" aria-label="Train and gateway selector">
       <label>
         Search Train No / Name
-        <input id="trainNo" type="text" value="" placeholder="Enter train number or name" autocomplete="off" list="recentTrainNos">
+        <input id="trainNo" name="trainNoSearch" type="text" value="" placeholder="Enter train number or name" autocomplete="search" list="recentTrainNos">
         <datalist id="recentTrainNos"></datalist>
       </label>
       <label>
@@ -493,6 +496,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="/static/app.js?v=20260716-train-names-v1"></script>
+  <script src="/static/app.js?v=20260716-no-autofill-v1"></script>
 </body>
 </html>
