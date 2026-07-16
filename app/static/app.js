@@ -369,8 +369,7 @@ function dashboardAlertToMapPoint(alert) {
 }
 
 function jitterPoint(lat, lon, index) {
-  const offset = index * 0.0008;
-  return [Number(lat) + offset, Number(lon) + offset];
+  return [Number(lat), Number(lon)];
 }
 
 function routePopup(point) {
