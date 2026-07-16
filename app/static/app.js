@@ -450,6 +450,11 @@ function renderDashboard(data) {
     const latest = latestAlertFor(alerts, gatewayId);
     const alertStatus = normalizeAlert(latest?.alert);
     const statusClass = gw.online ? 'online-box' : 'offline-box';
+    
+    const gatewayAlerts = alerts.filter((a) => a.gatewayId === gatewayId);
+    const severityCount = latest ? gatewayAlerts.filter((a) => normalizeAlert(a.alert) === alertStatus).length : 0;
+    const alertDisplay = latest ? `${alertStatus} (${severityCount})` : '-';
+    
     return `
       <article class="gateway-card ${statusClass}">
         <div class="gateway-title">
@@ -459,7 +464,7 @@ function renderDashboard(data) {
         <div class="gateway-kpis">
           <div><span>Train</span><strong>${train.trainNo || gw.trainId || '-'}</strong></div>
           <div><span>Latest Peak</span><strong>${latest ? `${latest.peakValueG} G` : '-'}</strong></div>
-          <div class="alert-kpi ${latest ? alertStatus : ''}"><span>Alert</span><strong>${latest ? alertStatus : '-'}</strong></div>
+          <div class="alert-kpi ${latest ? alertStatus : ''}"><span>Alert</span><strong>${alertDisplay}</strong></div>
           <div><span>Archives</span><strong>${archiveCountFor(archives, gatewayId)}</strong></div>
         </div>
         <div>Last heartbeat: ${formatDate(gw.lastHeartbeat)}</div>
