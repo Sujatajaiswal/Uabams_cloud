@@ -675,12 +675,12 @@ code { font-family: Consolas, monospace; font-size: 13px; }
   align-content: center;
   gap: 5px;
 }
-.alert-summary span { color: #cbd5e1; font-weight: 700; font-size: 13px; }
-.alert-summary strong { font-size: 28px; }
-.alert-summary.red { box-shadow: inset 5px 0 0 var(--red); }
-.alert-summary.yellow { box-shadow: inset 5px 0 0 var(--yellow); }
-.alert-summary.green { box-shadow: inset 5px 0 0 var(--green); }
-.alert-summary.total { box-shadow: inset 5px 0 0 var(--blue); }
+.alert-summary span { color: rgba(255, 255, 255, 0.9); font-weight: 700; font-size: 13px; }
+.alert-summary strong { font-size: 28px; color: #ffffff; }
+.alert-summary.red { background: var(--red); border-color: var(--red); }
+.alert-summary.yellow { background: var(--yellow); border-color: var(--yellow); }
+.alert-summary.green { background: var(--green); border-color: var(--green); }
+.alert-summary.total { background: var(--blue); border-color: var(--blue); }
 .leaflet-map {
   height: 430px;
   background: #dbeafe;
