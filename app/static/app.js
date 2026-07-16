@@ -2037,6 +2037,23 @@ function createAxisChart(canvasId, titleId, titleText, labels, dataPoints, dataC
   return chartInstance;
 }
 
+function zoomChart(axis, amount) {
+  const chart = axis === 'X' ? chartXInstance : axis === 'Y' ? chartYInstance : chartZInstance;
+  if (chart && typeof chart.zoom === 'function') {
+    chart.zoom(amount);
+  }
+}
+
+function resetChartZoom(axis) {
+  const chart = axis === 'X' ? chartXInstance : axis === 'Y' ? chartYInstance : chartZInstance;
+  if (chart && typeof chart.resetZoom === 'function') {
+    chart.resetZoom();
+  }
+}
+
+window.zoomChart = zoomChart;
+window.resetChartZoom = resetChartZoom;
+
 function renderRollingStockChart(data) {
   if (chartXInstance) { chartXInstance.destroy(); chartXInstance = null; }
   if (chartYInstance) { chartYInstance.destroy(); chartYInstance = null; }

@@ -486,14 +486,29 @@
         <div style="width: 100%; position: relative; height: 260px;">
           <h3 id="chartXTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">X Axis</h3>
           <canvas id="chartX"></canvas>
+          <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
+            <button onclick="zoomChart('X', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
+            <button onclick="zoomChart('X', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
+            <button onclick="resetChartZoom('X')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+          </div>
         </div>
         <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
           <h3 id="chartYTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Y Axis</h3>
           <canvas id="chartY"></canvas>
+          <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
+            <button onclick="zoomChart('Y', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
+            <button onclick="zoomChart('Y', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
+            <button onclick="resetChartZoom('Y')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+          </div>
         </div>
         <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
           <h3 id="chartZTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Z Axis</h3>
           <canvas id="chartZ"></canvas>
+          <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
+            <button onclick="zoomChart('Z', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
+            <button onclick="zoomChart('Z', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
+            <button onclick="resetChartZoom('Z')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+          </div>
         </div>
       </div>
     </section>
@@ -505,6 +520,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <script src="/static/app.js?v=20260716-stacked-graphs-v1"></script>
+  <script src="/static/app.js?v=20260716-zoom-controls-v1"></script>
 </body>
 </html>
