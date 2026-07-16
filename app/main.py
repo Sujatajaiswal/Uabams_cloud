@@ -1384,12 +1384,49 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
     for gateway_records in records_by_gateway.values():
         if not gateway_records:
             continue
-        # Filter strictly by the latest uploaded archive to avoid parallel lines from duplicate runs
-        latest_archive = gateway_records[0].get("archiveSha256")
-        if latest_archive:
-            filtered = [r for r in gateway_records if r.get("archiveSha256") == latest_archive]
-        else:
-            filtered = []
+            
+        # Group records by archiveSha256
+        archives_map = {}
+        for r in gateway_records:
+            sha = r.get("archiveSha256") or "unknown"
+            archives_map.setdefault(sha, []).append(r)
+            
+        # For each archive, find its position range and latest creation time
+        archive_infos = []
+        for sha, recs in archives_map.items():
+            positions = [x.get("positionMm") for x in recs if x.get("positionMm") is not None]
+            min_pos = min(positions) if positions else 0
+            max_pos = max(positions) if positions else 0
+            latest_created = max(x.get("createdAt") for x in recs) if recs else 0
+            archive_infos.append({
+                "sha": sha,
+                "min_pos": min_pos,
+                "max_pos": max_pos,
+                "created_at": latest_created,
+                "records": recs
+            })
+            
+        # Sort archives by latest creation time descending (latest first)
+        archive_infos.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        # Select non-overlapping archives to build a continuous path
+        selected_archives = []
+        selected_ranges = []
+        for info in archive_infos:
+            overlap = False
+            for r_min, r_max in selected_ranges:
+                # Check for range overlaps (with a small 500mm buffer to handle fuzzy boundaries)
+                if not (info["max_pos"] < r_min + 500 or info["min_pos"] > r_max - 500):
+                    overlap = True
+                    break
+            if not overlap:
+                selected_archives.append(info)
+                selected_ranges.append((info["min_pos"], info["max_pos"]))
+                
+        # Gather all records from selected archives
+        filtered = []
+        for info in selected_archives:
+            filtered.extend(info["records"])
             
         # Sort chronologically by positionMm to draw in movement order
         filtered.sort(key=lambda x: x.get("positionMm") or 0)
