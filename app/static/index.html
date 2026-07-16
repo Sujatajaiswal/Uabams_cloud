@@ -446,16 +446,9 @@
           <label for="graphAxisFilter">Select Axis</label>
           <div class="select-wrapper">
             <select id="graphAxisFilter" class="form-select">
-              <option value="all">All Axes (Consolidated Max)</option>
-              <option value="al_x">al_x (Axle Left X)</option>
-              <option value="al_y">al_y (Axle Left Y)</option>
-              <option value="al_z">al_z (Axle Left Z)</option>
-              <option value="ar_x">ar_x (Axle Right X)</option>
-              <option value="ar_y">ar_y (Axle Right Y)</option>
-              <option value="ar_z">ar_z (Axle Right Z)</option>
-              <option value="bg_x">bg_x (Bogie X)</option>
-              <option value="bg_y">bg_y (Bogie Y)</option>
-              <option value="bg_z">bg_z (Bogie Z)</option>
+              <option value="bg">Bogie (bg)</option>
+              <option value="al">Axle Left (al)</option>
+              <option value="ar">Axle Right (ar)</option>
             </select>
           </div>
         </div>
@@ -489,9 +482,18 @@
         </div>
       </div>
 
-      <div class="report-table-card" id="graphCard" style="display:none; padding: 24px;">
-        <div style="width: 100%; position: relative; min-height: 400px; height: 500px;">
-          <canvas id="rollingStockChart"></canvas>
+      <div class="report-table-card" id="graphCard" style="display:none; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="width: 100%; position: relative; height: 260px;">
+          <h3 id="chartXTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">X Axis</h3>
+          <canvas id="chartX"></canvas>
+        </div>
+        <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
+          <h3 id="chartYTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Y Axis</h3>
+          <canvas id="chartY"></canvas>
+        </div>
+        <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
+          <h3 id="chartZTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Z Axis</h3>
+          <canvas id="chartZ"></canvas>
         </div>
       </div>
     </section>
@@ -501,6 +503,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="/static/app.js?v=20260716-export-pdf-v1"></script>
+  <script src="/static/app.js?v=20260716-stacked-graphs-v1"></script>
 </body>
 </html>

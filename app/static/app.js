@@ -8,7 +8,9 @@ const trainMarkers = {};
 let autoRefreshTimer = null;
 let lastLoadedTrainNo = "";
 const recentTrainStorageKey = 'uabams_recent_train_numbers';
-let rollingStockChartInstance = null;
+let chartXInstance = null;
+let chartYInstance = null;
+let chartZInstance = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -1821,10 +1823,9 @@ async function loadGraphData() {
     const data = await ApiClient.post('/api/reports/graph/load', { rid, fromDate, toDate, metric });
     if (!data.points || data.points.length === 0) {
       alert("No telemetry records found for this train and date range.");
-      if (rollingStockChartInstance) {
-        rollingStockChartInstance.destroy();
-        rollingStockChartInstance = null;
-      }
+      if (chartXInstance) { chartXInstance.destroy(); chartXInstance = null; }
+      if (chartYInstance) { chartYInstance.destroy(); chartYInstance = null; }
+      if (chartZInstance) { chartZInstance.destroy(); chartZInstance = null; }
       $('graphMetadataSection').style.display = "none";
       $('graphCard').style.display = "none";
       return;
@@ -1842,17 +1843,183 @@ async function loadGraphData() {
   }
 }
 
-function renderRollingStockChart(data) {
-  const canvas = $('rollingStockChart');
-  if (!canvas) return;
+function createAxisChart(canvasId, titleId, titleText, labels, dataPoints, dataColor, speeds, thresholdRed, thresholdYellow, thresholdGreen, hasDistance, rawPoints) {
+  const canvas = $(canvasId);
+  if (!canvas) return null;
   const ctx = canvas.getContext('2d');
-  if (rollingStockChartInstance) {
-    rollingStockChartInstance.destroy();
-    rollingStockChartInstance = null;
+  
+  const titleElem = $(titleId);
+  if (titleElem) {
+    titleElem.textContent = titleText;
+    titleElem.style.color = dataColor;
   }
   
-  const selectedAxis = $('graphAxisFilter').value;
+  const pointsCount = dataPoints.length;
   
+  // High critical peaks marker style (red dots with white border)
+  const pointRadii = dataPoints.map(val => (val >= thresholdRed ? 5 : 0));
+  const pointBackgroundColors = dataPoints.map(val => (val >= thresholdRed ? '#ef4444' : 'transparent'));
+  const pointBorderColors = dataPoints.map(val => (val >= thresholdRed ? '#ffffff' : 'transparent'));
+  const pointBorderWidths = dataPoints.map(val => (val >= thresholdRed ? 2 : 0));
+  
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'G-Force',
+          data: dataPoints,
+          borderColor: dataColor,
+          backgroundColor: 'rgba(255, 255, 255, 0.02)',
+          yAxisID: 'y',
+          tension: 0.3,
+          borderWidth: 2.5,
+          pointRadius: pointRadii,
+          pointBackgroundColor: pointBackgroundColors,
+          pointBorderColor: pointBorderColors,
+          pointBorderWidth: pointBorderWidths,
+          fill: false
+        },
+        {
+          label: 'Speed (km/h)',
+          data: speeds,
+          borderColor: '#9ca3af',
+          backgroundColor: 'transparent',
+          yAxisID: 'y1',
+          tension: 0.3,
+          borderWidth: 1.5,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: false
+        },
+        {
+          label: 'Critical Threshold',
+          data: new Array(pointsCount).fill(thresholdRed),
+          borderColor: '#ef4444',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          yAxisID: 'y',
+          fill: false
+        },
+        {
+          label: 'Warning Threshold',
+          data: new Array(pointsCount).fill(thresholdYellow),
+          borderColor: '#f59e0b',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          yAxisID: 'y',
+          fill: false
+        },
+        {
+          label: 'Normal Threshold',
+          data: new Array(pointsCount).fill(thresholdGreen),
+          borderColor: '#10b981',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          yAxisID: 'y',
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {
+            color: '#f3f4f6',
+            boxWidth: 10,
+            font: { family: 'Outfit, Inter, sans-serif', size: 9 }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            afterLabel: function(context) {
+              if (context.datasetIndex === 0) {
+                const pt = rawPoints[context.dataIndex];
+                return `Time: ${pt.timestamp}`;
+              }
+              return '';
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: {
+            display: true,
+            text: 'G-Force (G)',
+            color: '#9ca3af',
+            font: { family: 'Outfit, Inter, sans-serif', size: 9, weight: 'bold' }
+          },
+          grid: {
+            color: 'rgba(73, 80, 87, 0.15)',
+          },
+          ticks: {
+            color: '#9ca3af',
+            font: { family: 'Outfit, Inter, sans-serif', size: 8 }
+          }
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: {
+            display: true,
+            text: 'Speed (km/h)',
+            color: '#9ca3af',
+            font: { family: 'Outfit, Inter, sans-serif', size: 9, weight: 'bold' }
+          },
+          grid: {
+            drawOnChartArea: false,
+          },
+          ticks: {
+            color: '#9ca3af',
+            font: { family: 'Outfit, Inter, sans-serif', size: 8 }
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: hasDistance ? 'Distance along route (KM)' : 'Time of Log',
+            color: '#9ca3af',
+            font: { family: 'Outfit, Inter, sans-serif', size: 9, weight: 'bold' }
+          },
+          grid: {
+            color: 'rgba(73, 80, 87, 0.15)',
+          },
+          ticks: {
+            color: '#9ca3af',
+            font: { family: 'Outfit, Inter, sans-serif', size: 8 }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderRollingStockChart(data) {
+  if (chartXInstance) { chartXInstance.destroy(); chartXInstance = null; }
+  if (chartYInstance) { chartYInstance.destroy(); chartYInstance = null; }
+  if (chartZInstance) { chartZInstance.destroy(); chartZInstance = null; }
+
+  const selectedAxisValue = $('graphAxisFilter').value;
+  const prefix = selectedAxisValue.startsWith('al') ? 'al' : selectedAxisValue.startsWith('ar') ? 'ar' : 'bg';
+  const metric = $('graphMetricFilter').value;
+
   let cumulativeDist = 0.0;
   const labels = [];
   for (let i = 0; i < data.points.length; i++) {
@@ -1882,145 +2049,35 @@ function renderRollingStockChart(data) {
   });
   
   const speeds = data.points.map(p => p.speed);
-  
-  let gForces = [];
-  let gForceLabel = "";
-  if (selectedAxis === "all") {
-    gForces = data.points.map(p => Math.max(...Object.values(p.axes)));
-    gForceLabel = "Max G-Force (all axes)";
-  } else {
-    gForces = data.points.map(p => p.axes[selectedAxis] ?? 0.0);
-    gForceLabel = `G-Force (${selectedAxis})`;
-  }
-  
-  const pointsCount = data.points.length;
-  
-  rollingStockChartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: formattedLabels,
-      datasets: [
-        {
-          label: gForceLabel,
-          data: gForces,
-          borderColor: '#4f46e5',
-          backgroundColor: 'rgba(79, 70, 229, 0.05)',
-          yAxisID: 'y',
-          tension: 0.3,
-          borderWidth: 3,
-          pointRadius: pointsCount > 100 ? 0 : 3,
-          fill: true
-        },
-        {
-          label: 'Speed (km/h)',
-          data: speeds,
-          borderColor: '#10b981',
-          backgroundColor: 'transparent',
-          yAxisID: 'y1',
-          tension: 0.3,
-          borderWidth: 2,
-          borderDash: [5, 5],
-          pointRadius: pointsCount > 100 ? 0 : 3,
-          fill: false
-        },
-        {
-          label: 'Maintenance Threshold (50 G)',
-          data: new Array(pointsCount).fill(50),
-          borderColor: '#f59e0b',
-          borderWidth: 2,
-          borderDash: [3, 3],
-          pointRadius: 0,
-          yAxisID: 'y',
-          fill: false
-        },
-        {
-          label: 'Critical Threshold (80 G)',
-          data: new Array(pointsCount).fill(80),
-          borderColor: '#ef4444',
-          borderWidth: 2,
-          borderDash: [3, 3],
-          pointRadius: 0,
-          yAxisID: 'y',
-          fill: false
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
-      plugins: {
-        legend: {
-          position: 'top',
-          labels: {
-            font: {
-              family: 'Outfit, Inter, sans-serif',
-              weight: 'bold'
-            }
-          }
-        },
-        tooltip: {
-          callbacks: {
-            afterLabel: function(context) {
-              if (context.datasetIndex === 0) {
-                const pt = data.points[context.dataIndex];
-                return `Time: ${pt.timestamp}`;
-              }
-              return '';
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          type: 'linear',
-          display: true,
-          position: 'left',
-          title: {
-            display: true,
-            text: 'Maximum G-Force (g)',
-            font: { family: 'Outfit, Inter, sans-serif', weight: 'bold' }
-          },
-          min: 0,
-          max: 100,
-          ticks: {
-            font: { family: 'Outfit, Inter, sans-serif' }
-          }
-        },
-        y1: {
-          type: 'linear',
-          display: true,
-          position: 'right',
-          title: {
-            display: true,
-            text: 'Speed (km/h)',
-            font: { family: 'Outfit, Inter, sans-serif', weight: 'bold' }
-          },
-          min: 0,
-          max: 120,
-          grid: {
-            drawOnChartArea: false,
-          },
-          ticks: {
-            font: { family: 'Outfit, Inter, sans-serif' }
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: hasDistance ? 'Distance along route (KM)' : 'Time of Log',
-            font: { family: 'Outfit, Inter, sans-serif', weight: 'bold' }
-          },
-          ticks: {
-            font: { family: 'Outfit, Inter, sans-serif' }
-          }
-        }
-      }
-    }
-  });
+
+  // Set up thresholds based on Peak vs RMS metric type
+  const isPeak = (metric === "Peak");
+  const thresholdRed = isPeak ? 8.0 : 4.0;
+  const thresholdYellow = isPeak ? 5.0 : 2.5;
+  const thresholdGreen = isPeak ? 2.0 : 1.0;
+
+  // Extract X, Y, and Z data arrays
+  const xData = data.points.map(p => p.axes[`${prefix}_x`] ?? 0.0);
+  const yData = data.points.map(p => p.axes[`${prefix}_y`] ?? 0.0);
+  const zData = data.points.map(p => p.axes[`${prefix}_z`] ?? 0.0);
+
+  // Render X Axis Chart (Red line)
+  chartXInstance = createAxisChart(
+    'chartX', 'chartXTitle', `X Axis — ${metric} Acceleration (${prefix}_x)`,
+    formattedLabels, xData, '#ef4444', speeds, thresholdRed, thresholdYellow, thresholdGreen, hasDistance, data.points
+  );
+
+  // Render Y Axis Chart (Green line)
+  chartYInstance = createAxisChart(
+    'chartY', 'chartYTitle', `Y Axis — ${metric} Acceleration (${prefix}_y)`,
+    formattedLabels, yData, '#10b981', speeds, thresholdRed, thresholdYellow, thresholdGreen, hasDistance, data.points
+  );
+
+  // Render Z Axis Chart (Blue line)
+  chartZInstance = createAxisChart(
+    'chartZ', 'chartZTitle', `Z Axis — ${metric} Acceleration (${prefix}_z)`,
+    formattedLabels, zData, '#3b82f6', speeds, thresholdRed, thresholdYellow, thresholdGreen, hasDistance, data.points
+  );
 }
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
