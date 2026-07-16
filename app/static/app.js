@@ -195,7 +195,10 @@ function rememberTrainNumber(trainNo) {
   const cleanTrainNo = String(trainNo || '').trim();
   if (!cleanTrainNo) return;
 
-  localStorage.setItem(recentTrainStorageKey, JSON.stringify([cleanTrainNo]));
+  const currentRecents = recentTrainNumbers();
+  const updated = [cleanTrainNo, ...currentRecents.filter(x => x !== cleanTrainNo)].slice(0, 10);
+
+  localStorage.setItem(recentTrainStorageKey, JSON.stringify(updated));
   renderRecentTrainNumbers();
 }
 
