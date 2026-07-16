@@ -379,7 +379,7 @@ button { cursor: pointer; font-weight: 700; }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
 }
 .metric {
@@ -899,7 +899,7 @@ code { font-family: Consolas, monospace; font-size: 13px; }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 16px;
 }
 
@@ -1374,5 +1374,9 @@ code { font-family: Consolas, monospace; font-size: 13px; }
 }
 .custom-autocomplete-dropdown td.train-link:hover {
   text-decoration: underline;
+}
+
+.clickable-row:hover td {
+  background-color: var(--surface-3, #e9ecef) !important;
 }
 

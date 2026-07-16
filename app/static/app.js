@@ -459,6 +459,16 @@ function renderDashboard(data) {
     ? `${train.trainNo} - ${train.trainName}`
     : train.trainNo || '-';
   setText('summaryTrain', trainDisplayName);
+  let latestTripStr = '-';
+  if (state.selectedTrip) {
+    latestTripStr = `${state.selectedTrip.startTimeStr}<br>to<br>${state.selectedTrip.endTimeStr}`;
+  } else if (archives && archives.length > 0) {
+    const latestArch = archives[0];
+    const endTimeVal = new Date(latestArch.receivedAt);
+    const startTimeVal = new Date(endTimeVal.getTime() - 60 * 60 * 1000);
+    latestTripStr = `${formatDate(startTimeVal)}<br>to<br>${formatDate(endTimeVal)}`;
+  }
+  setHtml('summaryLatestTrip', latestTripStr);
   setText('summaryStatus', train.status || '-');
   setText('summaryGateways', `${onlineCount}/${allGatewayIds.length || 0}`);
   setText('summaryLastData', formatDate(lastDataTime(train, allGateways, alerts, archives)));
@@ -746,18 +756,32 @@ async function loadLogs() {
   }
 }
 
+window.viewTripOnDashboard = function(startTimeStr, endTimeStr) {
+  state.selectedTrip = { startTimeStr, endTimeStr };
+  selectTab('overview');
+  setHtml('summaryLatestTrip', `${startTimeStr}<br>to<br>${endTimeStr}`);
+};
+
 function renderArchives(archives) {
-  setHtml('archiveTable', archives.length ? archives.map((archive) => `
-    <tr>
-      <td>${formatDate(archive.receivedAt)}</td>
-      <td>${archive.gatewayId || '-'}</td>
-      <td>${bytes(archive.sizeBytes)}</td>
-      <td>${archive.rmsRecordCount ?? 0}</td>
-      <td>${archive.peakRecordCount ?? 0}</td>
-      <td>${archive.faultRecordCount ?? 0}</td>
-      <td>${archive.status || '-'}</td>
-    </tr>
-  `).join('') : '<tr><td colspan="7">No archives uploaded.</td></tr>');
+  setHtml('archiveTable', archives.length ? archives.map((archive) => {
+    const endTimeVal = new Date(archive.receivedAt);
+    const startTimeVal = new Date(endTimeVal.getTime() - 60 * 60 * 1000);
+    const startTimeStr = formatDate(startTimeVal);
+    const endTimeStr = formatDate(endTimeVal);
+    const alertCount = archive.peakAlertCount ?? archive.faultRecordCount ?? 0;
+    
+    return `
+      <tr onclick="viewTripOnDashboard('${startTimeStr}', '${endTimeStr}')" style="cursor: pointer;" class="clickable-row">
+        <td>${startTimeStr}</td>
+        <td>${endTimeStr}</td>
+        <td>${bytes(archive.sizeBytes)}</td>
+        <td>${archive.rmsRecordCount ?? 0}</td>
+        <td>${archive.peakRecordCount ?? 0}</td>
+        <td>${alertCount}</td>
+        <td>${archive.status || '-'}</td>
+      </tr>
+    `;
+  }).join('') : '<tr><td colspan="7">No archives uploaded.</td></tr>');
 }
 
 function renderGatewayDetails(data) {
@@ -992,6 +1016,9 @@ async function saveCalibration(gatewayId) {
 
 async function loadDashboard(options = {}) {
   const trainNo = trainNoValue();
+  if (lastLoadedTrainNo !== trainNo) {
+    state.selectedTrip = null;
+  }
   if (!trainNo) {
     setStatus('Enter train number', 'error');
     renderGatewayCards(dashboardGatewayIds);

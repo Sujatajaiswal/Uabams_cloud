@@ -81,6 +81,7 @@
     <section id="overview" class="panel active">
       <div class="summary-grid">
         <div class="metric"><span>Train No / Name</span><strong id="summaryTrain">-</strong></div>
+        <div class="metric"><span>Latest Trip</span><strong id="summaryLatestTrip" style="font-size: 13px; line-height: 1.4; color: var(--ink); text-align: center; font-weight: bold;">-</strong></div>
         <div class="metric"><span>Status</span><strong id="summaryStatus">-</strong></div>
         <div class="metric"><span>Gateways Online</span><strong id="summaryGateways">-</strong></div>
         <div class="metric"><span>Last Data</span><strong id="summaryLastData">-</strong></div>
@@ -112,11 +113,39 @@
         <div class="section-head"><h2>Recent Archives For Selected Gateway</h2></div>
         <div class="table-wrap compact-table">
           <table>
-            <thead><tr><th>Received</th><th>Size</th><th>RMS</th><th>Peak</th><th>Faults</th><th>Status</th></tr></thead>
+            <thead>
+              <tr><th>Received</th><th>Size</th><th>RMS</th><th>Peak</th><th>Alerts</th><th>Status</th></tr>
+            </thead>
             <tbody id="detailArchivesTable"></tbody>
           </table>
         </div>
       </section>
+
+      <div class="section-head"><h2>Route Map</h2></div>
+      <div class="map-pair">
+        <article class="map-card" data-map-gateway="GW_UABAMS_BOGIE_01">
+          <div class="gateway-title"><span>GW1 Route Map</span><span id="gw1MapState" class="badge offline">-</span></div>
+          <div class="route-map leaflet-map" id="mapGw1"></div>
+        </article>
+        <article class="map-card" data-map-gateway="GW_UABAMS_BOGIE_02">
+          <div class="gateway-title"><span>GW2 Route Map</span><span id="gw2MapState" class="badge offline">-</span></div>
+          <div class="route-map leaflet-map" id="mapGw2"></div>
+        </article>
+      </div>
+      <div class="map-legend">
+        <span class="dot GREEN"></span> Normal route
+        <span class="dot YELLOW"></span> Warning route
+        <span class="dot RED"></span> Critical route / red alert marker
+      </div>
+      <div class="section-head"><h2>Alert Events</h2></div>
+      <div class="table-wrap compact-table">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Gateway</th><th>Peak G</th><th>Alert</th><th>Location</th></tr>
+          </thead>
+          <tbody id="alertsTable"></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="calibration" class="panel">
@@ -182,7 +211,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Received</th><th>Gateway</th><th>Size</th><th>RMS</th><th>Peak</th><th>Faults</th><th>Status</th></tr>
+            <tr><th>Start Date</th><th>End Date</th><th>Size</th><th>RMS</th><th>Peak</th><th>Alert</th><th>Status</th></tr>
           </thead>
           <tbody id="archiveTable"></tbody>
         </table>
@@ -496,6 +525,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="/static/app.js?v=20260716-map-train-icon-v1"></script>
+  <script src="/static/app.js?v=20260716-archives-trip-v1"></script>
 </body>
 </html>
