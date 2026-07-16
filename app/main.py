@@ -1742,6 +1742,91 @@ async def export_repeated_alarm_excel(data: RepeatedAlarmRequest, request: Reque
     )
 
 
+def generate_pdf_report(title: str, headers: list[str], data_rows: list[list[str]]) -> bytes:
+    from io import BytesIO
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        leading=22,
+        textColor=colors.HexColor('#1d70b8'),
+        spaceAfter=15
+    )
+    story.append(Paragraph(title, title_style))
+    story.append(Spacer(1, 10))
+    
+    body_style = ParagraphStyle(
+        'BodyStyle',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=11
+    )
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12,
+        textColor=colors.white,
+        fontName='Helvetica-Bold'
+    )
+    
+    table_data = []
+    table_data.append([Paragraph(h, header_style) for h in headers])
+    
+    for row in data_rows:
+        table_data.append([Paragraph(str(cell), body_style) for cell in row])
+        
+    col_width = 540 / len(headers)
+    t = Table(table_data, colWidths=[col_width] * len(headers))
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1d70b8')),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ]))
+    
+    story.append(t)
+    doc.build(story)
+    
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
+
+@app.post("/api/reports/repeated-alarm/export/pdf")
+async def export_repeated_alarm_pdf(data: RepeatedAlarmRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    res = await load_repeated_alarm_report(data, request)
+    rows = res["rows"]
+    
+    headers = ["RID", "Count", "Location"]
+    data_rows = [[r["rid"], str(r["count"]), r["location"]] for r in rows]
+    
+    pdf_bytes = generate_pdf_report("Repeated Alarms Report", headers, data_rows)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=RepeatedAlarms.pdf"}
+    )
+
+
 @app.post("/api/reports/alarm-log/load")
 async def load_alarm_log_report(data: AlarmLogRequest, request: Request):
     if not is_operator_authenticated(request):
@@ -1887,6 +1972,25 @@ async def export_alarm_log_excel(data: AlarmLogRequest, request: Request):
         content=content,
         media_type="application/vnd.ms-excel",
         headers={"Content-Disposition": "attachment; filename=AlarmLog.xls"}
+    )
+
+
+@app.post("/api/reports/alarm-log/export/pdf")
+async def export_alarm_log_pdf(data: AlarmLogRequest, request: Request):
+    if not is_operator_authenticated(request):
+        raise HTTPException(status_code=401, detail="Login required")
+        
+    res = await load_alarm_log_report(data, request)
+    rows = res["rows"]
+    
+    headers = ["Date", "Time", "Machine", "Train", "Location"]
+    data_rows = [[r["alarmDate"], r["alarmTime"], r["machineName"], r["train"], r["location"]] for r in rows]
+    
+    pdf_bytes = generate_pdf_report("Alarm Log Report", headers, data_rows)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=AlarmLog.pdf"}
     )
 
 

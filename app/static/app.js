@@ -1621,6 +1621,20 @@ async function exportRepeatedAlarmExcel() {
   }
 }
 
+async function exportRepeatedAlarmPdf() {
+  const payload = { fromDate: $('repFromDate').value, toDate: $('repToDate').value };
+  try {
+    const response = await fetch('/api/reports/repeated-alarm/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await ExportUtils.downloadResponse(response, "RepeatedAlarms.pdf");
+  } catch (error) {
+    alert("Failed to export Repeated Alarms PDF.");
+  }
+}
+
 async function exportCsv() {
   const payload = {
     rid: $('ridInput').value.trim(),
@@ -1658,6 +1672,26 @@ async function exportExcel() {
     await ExportUtils.downloadResponse(response, "AlarmLog.xls");
   } catch (error) {
     alert("Failed to export Alarm Log Excel.");
+  }
+}
+
+async function exportPdf() {
+  const payload = {
+    rid: $('ridInput').value.trim(),
+    fromDate: $('fromDate').value,
+    toDate: $('toDate').value,
+    alarmType: $('alarmTypeFilter').value,
+    feedbackStatus: $('feedbackStatusFilter').value
+  };
+  try {
+    const response = await fetch('/api/reports/alarm-log/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await ExportUtils.downloadResponse(response, "AlarmLog.pdf");
+  } catch (error) {
+    alert("Failed to export Alarm Log PDF.");
   }
 }
 
@@ -1751,8 +1785,10 @@ function initializeReports() {
   
   $('repExportCsvBtn')?.addEventListener("click", exportRepeatedAlarmCsv);
   $('repExportExcelBtn')?.addEventListener("click", exportRepeatedAlarmExcel);
+  $('repExportPdfBtn')?.addEventListener("click", exportRepeatedAlarmPdf);
   $('exportCsvBtn')?.addEventListener("click", exportCsv);
   $('exportExcelBtn')?.addEventListener("click", exportExcel);
+  $('exportPdfBtn')?.addEventListener("click", exportPdf);
   
   $('closeFeedbackModalBtn')?.addEventListener("click", closeFeedbackModal);
   $('submitFeedbackBtn')?.addEventListener("click", submitFeedback);
