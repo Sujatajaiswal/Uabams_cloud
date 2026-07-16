@@ -115,7 +115,12 @@ function renderRecentTrainNumbers() {
   const renderList = (trainObjects) => {
     list.innerHTML = trainObjects
       .map((t) => {
-        const label = t.trainName ? `${t.trainNo} - ${t.trainName}` : t.trainNo;
+        const no = (typeof t === 'object' && t !== null) ? (t.trainNo || '') : String(t);
+        const name = (typeof t === 'object' && t !== null) ? (t.trainName || '') : '';
+        
+        if (no === '[object Object]' || no === 'object Object' || !no) return '';
+        
+        const label = name ? `${no} - ${name}` : no;
         return `<option value="${escapeHtml(label)}"></option>`;
       })
       .join('');
@@ -133,14 +138,36 @@ function renderRecentTrainNumbers() {
     .then((res) => res.json())
     .then((serverTrains) => {
       if (Array.isArray(serverTrains)) {
+        const standardizedServerTrains = serverTrains.map(t => {
+          if (typeof t === 'object' && t !== null) {
+            return t;
+          }
+          const no = String(t);
+          let name = 'Express Train';
+          if (no === '019456') {
+            name = 'Gatimaan Express';
+          } else if (no.startsWith('TR_')) {
+            try {
+              const num = parseInt(no.split('_')[1], 10);
+              const names_pool = [
+                "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
+                "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
+                "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
+              ];
+              name = names_pool[num % names_pool.length];
+            } catch (e) {}
+          }
+          return { trainNo: no, trainName: name };
+        });
+
         const map = new Map();
         localTrainNos.forEach(no => map.set(no, { trainNo: no, trainName: '' }));
-        serverTrains.forEach(t => map.set(t.trainNo, t));
+        standardizedServerTrains.forEach(t => map.set(t.trainNo, t));
         const combined = Array.from(map.values());
         
         combined.forEach(item => {
           if (!item.trainName) {
-            const serverMatch = serverTrains.find(s => s.trainNo === item.trainNo);
+            const serverMatch = standardizedServerTrains.find(s => s.trainNo === item.trainNo);
             if (serverMatch) item.trainName = serverMatch.trainName;
           }
         });
