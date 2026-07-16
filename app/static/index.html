@@ -50,10 +50,10 @@
 
   <main class="layout">
     <section class="toolbar gateway-toolbar" aria-label="Train and gateway selector">
-      <label>
+      <label style="position: relative;">
         Search Train No / Name
-        <input id="trainNo" type="text" value="" placeholder="Enter train number or name" autocomplete="off" list="recentTrainNos">
-        <datalist id="recentTrainNos"></datalist>
+        <input id="trainNo" type="text" value="" placeholder="Enter train number or name" autocomplete="off">
+        <div id="trainAutocompleteDropdown" class="custom-autocomplete-dropdown hidden"></div>
       </label>
       <label>
         Gateway
