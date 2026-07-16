@@ -1384,16 +1384,15 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
     for gateway_records in records_by_gateway.values():
         if not gateway_records:
             continue
-        # Filter by the latest active session name (with archive SHA fallback if session is missing)
-        latest_session = gateway_records[0].get("sessionName")
-        if latest_session:
-            filtered = [r for r in gateway_records if r.get("sessionName") == latest_session]
-        else:
-            latest_archive = gateway_records[0].get("archiveSha256")
+        # Filter strictly by the latest uploaded archive to avoid parallel lines from duplicate runs
+        latest_archive = gateway_records[0].get("archiveSha256")
+        if latest_archive:
             filtered = [r for r in gateway_records if r.get("archiveSha256") == latest_archive]
+        else:
+            filtered = []
             
-        # Sort chronologically by creation time so the route is drawn in movement order
-        filtered.sort(key=lambda x: x.get("createdAt") or 0)
+        # Sort chronologically by positionMm to draw in movement order
+        filtered.sort(key=lambda x: x.get("positionMm") or 0)
         records.extend(filtered)
 
     return [
