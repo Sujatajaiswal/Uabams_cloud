@@ -1385,13 +1385,21 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
         if not gateway_records:
             continue
             
-        # Group records by archiveSha256
+        # 1. Filter by the latest session name to keep all segments from the same active run
+        latest_session = gateway_records[0].get("sessionName")
+        if latest_session:
+            session_records = [r for r in gateway_records if r.get("sessionName") == latest_session]
+        else:
+            latest_archive = gateway_records[0].get("archiveSha256")
+            session_records = [r for r in gateway_records if r.get("archiveSha256") == latest_archive]
+            
+        # 2. Group these session records by archiveSha256
         archives_map = {}
-        for r in gateway_records:
+        for r in session_records:
             sha = r.get("archiveSha256") or "unknown"
             archives_map.setdefault(sha, []).append(r)
             
-        # For each archive, find its position range and latest creation time
+        # 3. For each archive in the session, find its position range and latest creation time
         archive_infos = []
         for sha, recs in archives_map.items():
             positions = [x.get("positionMm") for x in recs if x.get("positionMm") is not None]
@@ -1409,7 +1417,7 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
         # Sort archives by latest creation time descending (latest first)
         archive_infos.sort(key=lambda x: x["created_at"], reverse=True)
         
-        # Select non-overlapping archives to build a continuous path
+        # 4. Select non-overlapping archives to build a continuous path
         selected_archives = []
         selected_ranges = []
         for info in archive_infos:
