@@ -409,6 +409,26 @@ function syncCalibrationGateway() {
 }
 
 function renderDashboard(data) {
+  const userRole = data.userRole || 'operator';
+  const internalTabs = ['calibration', 'archives', 'reset', 'logs'];
+  
+  document.querySelectorAll('.tab').forEach((button) => {
+    const tabId = button.dataset.tab;
+    if (internalTabs.includes(tabId)) {
+      if (userRole === 'admin') {
+        button.style.display = '';
+      } else {
+        button.style.display = 'none';
+      }
+    }
+  });
+
+  const activeTabBtn = document.querySelector('.tab.active');
+  const activeTabId = activeTabBtn ? activeTabBtn.dataset.tab : '';
+  if (userRole !== 'admin' && internalTabs.includes(activeTabId)) {
+    selectTab('overview');
+  }
+
   state.dashboard = data;
   updateGatewaySelector(data);
   const selectedGateway = selectedGatewayValue();

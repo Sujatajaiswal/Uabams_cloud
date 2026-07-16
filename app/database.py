@@ -15,8 +15,10 @@ def get_settings() -> dict[str, str]:
         "jwt_secret": os.getenv("JWT_SECRET", "change-this-secret"),
         "jwt_algorithm": os.getenv("JWT_ALGORITHM", "HS256"),
         "admin_reset_key": os.getenv("ADMIN_RESET_KEY", ""),
-        "operator_username": os.getenv("OPERATOR_USERNAME", "admin"),
-        "operator_password": os.getenv("OPERATOR_PASSWORD", "admin123"),
+        "admin_username": os.getenv("ADMIN_USERNAME", "admin"),
+        "admin_password": os.getenv("ADMIN_PASSWORD", "admin123"),
+        "operator_username": os.getenv("OPERATOR_USERNAME", "operator"),
+        "operator_password": os.getenv("OPERATOR_PASSWORD", "operator123"),
     }
 
 

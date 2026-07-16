@@ -204,11 +204,11 @@ async def store_time_domain_files(
     return stored_files
 
 
-def create_operator_session(username: str) -> str:
+def create_operator_session(username: str, role: str = "operator") -> str:
     now = utc_now()
     payload = {
         "sub": username,
-        "role": "operator",
+        "role": role,
         "iat": now,
         "exp": now + timedelta(hours=OPERATOR_SESSION_HOURS),
     }
@@ -223,11 +223,14 @@ def operator_session_payload(request: Request) -> dict[str, Any] | None:
         payload = jwt.decode(token, settings["jwt_secret"], algorithms=[settings["jwt_algorithm"]])
     except jwt.PyJWTError:
         return None
-    if payload.get("role") != "operator":
-        return None
-    if payload.get("sub") != settings["operator_username"]:
-        return None
-    return payload
+    
+    role = payload.get("role")
+    sub = payload.get("sub")
+    if role == "admin" and sub == settings["admin_username"]:
+        return payload
+    if role == "operator" and sub == settings["operator_username"]:
+        return payload
+    return None
 
 
 def is_operator_authenticated(request: Request) -> bool:
@@ -436,15 +439,26 @@ async def login_submit(request: Request):
     form = parse_qs(body, keep_blank_values=True)
     username = form.get("username", [""])[0]
     password = form.get("password", [""])[0]
-    username_ok = compare_digest(username, settings["operator_username"])
-    password_ok = compare_digest(password, settings["operator_password"])
-    if not (username_ok and password_ok):
+    
+    admin_user_ok = compare_digest(username, settings["admin_username"])
+    admin_pass_ok = compare_digest(password, settings["admin_password"])
+    
+    operator_user_ok = compare_digest(username, settings["operator_username"])
+    operator_pass_ok = compare_digest(password, settings["operator_password"])
+    
+    role = None
+    if admin_user_ok and admin_pass_ok:
+        role = "admin"
+    elif operator_user_ok and operator_pass_ok:
+        role = "operator"
+        
+    if not role:
         return render_login_page("Invalid username or password")
 
     response = RedirectResponse("/dashboard", status_code=303)
     response.set_cookie(
         OPERATOR_COOKIE_NAME,
-        create_operator_session(username),
+        create_operator_session(username, role),
         max_age=OPERATOR_SESSION_HOURS * 60 * 60,
         httponly=True,
         secure=request.url.scheme == "https",
@@ -1133,7 +1147,7 @@ async def list_trains():
 
 
 @app.get("/api/v1/trains/{train_no}/dashboard")
-async def train_dashboard(train_no: str):
+async def train_dashboard(train_no: str, request: Request):
     train = await db.trains.find_one({"trainNo": train_no})
     if not train:
         raise HTTPException(status_code=404, detail="Train not found")
@@ -1180,12 +1194,16 @@ async def train_dashboard(train_no: str):
     if display_train.get("trainNo", "").startswith("TR_"):
         display_train["trainNo"] = display_train["trainNo"].replace("TR_", "")
 
+    payload = operator_session_payload(request)
+    role = payload.get("role") if payload else "operator"
+
     return {
         "train": serialize(display_train),
         "gateways": serialize(gateway_cards),
         "lastAlerts": serialize(alerts),
         "archives": serialize(archives),
         "activeSession": serialize(active_session) if active_session else None,
+        "userRole": role,
     }
 
 
