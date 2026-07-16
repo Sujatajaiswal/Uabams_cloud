@@ -1810,10 +1810,17 @@ window.showFeedbackModal = showFeedbackModal;
 window.focusLocationOnMap = focusLocationOnMap;
 
 async function loadGraphData() {
-  const rid = $('graphRid').value.trim();
+  let rid = $('graphRid').value.trim();
   if (!rid) {
     alert("Please enter a Rolling Stock ID (RID)");
     return;
+  }
+  // Extract real ID before " - " if present
+  const idPart = rid.split(" - ")[0].trim();
+  if (/^\d{3}$/.test(idPart)) {
+    rid = "TR_" + idPart;
+  } else {
+    rid = idPart;
   }
   const fromDate = $('graphFromDate').value;
   const toDate = $('graphToDate').value;
@@ -1862,7 +1869,7 @@ function createAxisChart(canvasId, titleId, titleText, labels, dataPoints, dataC
   const pointBorderColors = dataPoints.map(val => (val >= thresholdRed ? '#ffffff' : 'transparent'));
   const pointBorderWidths = dataPoints.map(val => (val >= thresholdRed ? 2 : 0));
   
-  return new Chart(ctx, {
+  const chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
@@ -1942,6 +1949,17 @@ function createAxisChart(canvasId, titleId, titleText, labels, dataPoints, dataC
             font: { family: 'Outfit, Inter, sans-serif', size: 9 }
           }
         },
+        zoom: {
+          zoom: {
+            drag: {
+              enabled: true,
+              backgroundColor: 'rgba(29, 112, 184, 0.25)',
+              borderColor: 'rgba(29, 112, 184, 0.6)',
+              borderWidth: 1
+            },
+            mode: 'x'
+          }
+        },
         tooltip: {
           callbacks: {
             afterLabel: function(context) {
@@ -2009,6 +2027,14 @@ function createAxisChart(canvasId, titleId, titleText, labels, dataPoints, dataC
       }
     }
   });
+
+  canvas.addEventListener('dblclick', () => {
+    if (chartInstance && typeof chartInstance.resetZoom === 'function') {
+      chartInstance.resetZoom();
+    }
+  });
+
+  return chartInstance;
 }
 
 function renderRollingStockChart(data) {
