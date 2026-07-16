@@ -309,6 +309,16 @@ def render_login_page(error: str = "") -> HTMLResponse:
               </svg>
             </button>
           </div>
+          <div class="user-groups-container" style="margin-bottom: 22px; display: flex; justify-content: space-around; background: rgba(255, 255, 255, 0.15); padding: 10px; border-radius: 6px; border: 1px solid #9da8b5;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #172033; font-weight: 600; user-select: none;">
+              <input type="radio" name="user_group" value="operator" checked style="accent-color: #1d70b8; width: 16px; height: 16px; cursor: pointer;">
+              Operator Group
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #172033; font-weight: 600; user-select: none;">
+              <input type="radio" name="user_group" value="admin" style="accent-color: #1d70b8; width: 16px; height: 16px; cursor: pointer;">
+              Administrator Group
+            </label>
+          </div>
           <button class="login-btn" type="submit">Login</button>
         </form>
       </div>
@@ -439,6 +449,7 @@ async def login_submit(request: Request):
     form = parse_qs(body, keep_blank_values=True)
     username = form.get("username", [""])[0]
     password = form.get("password", [""])[0]
+    user_group = form.get("user_group", ["operator"])[0]
     
     admin_user_ok = compare_digest(username, settings["admin_username"])
     admin_pass_ok = compare_digest(password, settings["admin_password"])
@@ -447,13 +458,16 @@ async def login_submit(request: Request):
     operator_pass_ok = compare_digest(password, settings["operator_password"])
     
     role = None
-    if admin_user_ok and admin_pass_ok:
-        role = "admin"
-    elif operator_user_ok and operator_pass_ok:
-        role = "operator"
-        
-    if not role:
-        return render_login_page("Invalid username or password")
+    if user_group == "admin":
+        if admin_user_ok and admin_pass_ok:
+            role = "admin"
+        else:
+            return render_login_page("Invalid username or password for Administrator Group")
+    else:
+        if operator_user_ok and operator_pass_ok:
+            role = "operator"
+        else:
+            return render_login_page("Invalid username or password for Operator Group")
 
     response = RedirectResponse("/dashboard", status_code=303)
     response.set_cookie(
