@@ -587,21 +587,15 @@ function addDirectionArrow(layer, previous, current, severity) {
 
 function trainIconHtml(bearing) {
   const rotation = Number.isFinite(Number(bearing)) ? Number(bearing) : 0;
-  return `<div class="train-position-icon" style="transform: rotate(${rotation}deg)">&#9650;</div>`;
+  return `
+    <div style="background: #ffffff; border: 2.5px solid #1d70b8; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(0,0,0,0.35); transform: rotate(${rotation}deg); transition: transform 0.2s ease;">
+      <i class="bi bi-train-front-fill" style="font-size: 20px; color: #1d70b8; display: block; line-height: 1;"></i>
+    </div>
+  `;
 }
 
 function drawColoredRoute(layer, points) {
   if (!layer || points.length < 2) return;
-  const latLngs = points.map((point) => [Number(point.lat), Number(point.lon)]);
-  L.polyline(latLngs, {
-    color: '#2f241f',
-    weight: 18,
-    opacity: 0.58,
-    lineCap: 'round',
-    lineJoin: 'round',
-    smoothFactor: 1.2,
-    className: 'route-line-shadow',
-  }).addTo(layer);
 
   for (let i = 1; i < points.length; i += 1) {
     const previous = points[i - 1];
@@ -611,15 +605,14 @@ function drawColoredRoute(layer, points) {
       [[Number(previous.lat), Number(previous.lon)], [Number(current.lat), Number(current.lon)]],
       {
         color: alertColor(severity),
-        weight: severity === 'RED' ? 13 : 12,
-        opacity: 0.96,
+        weight: 6,
+        opacity: 0.9,
         lineCap: 'round',
         lineJoin: 'round',
         smoothFactor: 1.2,
         className: 'route-line',
       }
     ).addTo(layer);
-    if (i % 8 === 0 || severity === 'RED') addDirectionArrow(layer, previous, current, severity);
   }
 }
 
@@ -667,10 +660,10 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
       if (severity !== 'RED') return;
       const markerPoint = jitterPoint(point.lat, point.lon, index);
       L.circleMarker(markerPoint, {
-        radius: 13,
-        color: '#111827',
-        weight: 2,
-        fillColor: alertColor(severity),
+        radius: 8,
+        color: '#ffffff',
+        weight: 2.5,
+        fillColor: '#c24134',
         fillOpacity: 1,
       })
         .addTo(layer)
@@ -709,8 +702,8 @@ async function renderGatewayTrainPosition(trainNo, gatewayId) {
       icon: L.divIcon({
         className: '',
         html: trainIconHtml(point.bearing),
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
       }),
       zIndexOffset: 900,
     }).addTo(map).bindPopup(`Current train position<br>Gateway: ${data.gatewayId}<br>Speed: ${point.speedKmph ?? '-'} kmph<br>Position: ${point.positionMm ?? '-'} mm`);
