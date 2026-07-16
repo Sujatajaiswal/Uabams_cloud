@@ -768,7 +768,7 @@ async function loadLogs() {
         badgeStyle = 'background: rgba(16, 185, 129, 0.12); color: #a7f3d0; border: 1px solid rgba(16, 185, 129, 0.35);';
       }
       
-      const badgeHtml = `<span style="padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; text-transform: uppercase; ${badgeStyle}">${escapeHtml(log.action || '-')}</span>`;
+      const badgeHtml = `<span style="padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; text-transform: uppercase; ${badgeStyle}">${severity}</span>`;
       
       const errHtml = log.errorMessage && log.errorMessage !== '-' ? `
         <span style="color: #ef4444; font-weight: bold;">${escapeHtml(log.errorMessage)}</span>
@@ -779,15 +779,16 @@ async function loadLogs() {
           <td>${formatDate(log.createdAt)}</td>
           <td>${escapeHtml(log.username || '-')}</td>
           <td>${escapeHtml(log.page || '-')}</td>
+          <td>${escapeHtml(log.action || '-')}</td>
           <td>${badgeHtml}</td>
           <td>${errHtml}</td>
           <td>${escapeHtml(log.ipAddress || '-')}</td>
           <td>${log.latitude && log.longitude ? `${log.latitude}, ${log.longitude}` : '-'}</td>
         </tr>
       `;
-    }).join('') : '<tr><td colspan="7">No logs found.</td></tr>');
+    }).join('') : '<tr><td colspan="8">No logs found.</td></tr>');
   } catch (error) {
-    setHtml('logsTable', `<tr><td colspan="7" class="error-text">${escapeHtml(error.message)}</td></tr>`);
+    setHtml('logsTable', `<tr><td colspan="8" class="error-text">${escapeHtml(error.message)}</td></tr>`);
   }
 }
 
