@@ -482,32 +482,96 @@
         </div>
       </div>
 
-      <div class="report-table-card" id="graphCard" style="display:none; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
-        <div style="width: 100%; position: relative; height: 260px;">
-          <h3 id="chartXTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">X Axis</h3>
-          <canvas id="chartX"></canvas>
-          <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
-            <button onclick="zoomChart('X', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
-            <button onclick="zoomChart('X', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
-            <button onclick="resetChartZoom('X')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+      <div id="graphMainContent" style="display:none; grid-template-columns: 3.2fr 1fr; gap: 20px;">
+        <div class="report-table-card" id="graphCard" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+          <div style="width: 100%; position: relative; height: 260px;">
+            <h3 id="chartXTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">X Axis</h3>
+            <canvas id="chartX"></canvas>
+            <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
+              <button onclick="zoomChart('X', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
+              <button onclick="zoomChart('X', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
+              <button onclick="resetChartZoom('X')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+            </div>
+          </div>
+          <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
+            <h3 id="chartYTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Y Axis</h3>
+            <canvas id="chartY"></canvas>
+            <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
+              <button onclick="zoomChart('Y', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
+              <button onclick="zoomChart('Y', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
+              <button onclick="resetChartZoom('Y')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+            </div>
+          </div>
+          <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
+            <h3 id="chartZTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Z Axis</h3>
+            <canvas id="chartZ"></canvas>
+            <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
+              <button onclick="zoomChart('Z', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
+              <button onclick="zoomChart('Z', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
+              <button onclick="resetChartZoom('Z')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+            </div>
           </div>
         </div>
-        <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
-          <h3 id="chartYTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Y Axis</h3>
-          <canvas id="chartY"></canvas>
-          <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
-            <button onclick="zoomChart('Y', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
-            <button onclick="zoomChart('Y', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
-            <button onclick="resetChartZoom('Y')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+
+        <div class="report-table-card" id="graphSidebar" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; background: #111827; border: 1px solid #1f2937; border-radius: 8px;">
+          <h3 style="font-size: 15px; font-weight: bold; border-bottom: 1px solid #1f2937; padding-bottom: 10px; margin-bottom: 5px; color: #f9fafb;">Analysis Sidebar</h3>
+          
+          <div class="sidebar-section">
+            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Alert Summary</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; border-radius: 4px;">
+                <span style="font-weight: bold; color: #fca5a5; font-size: 11px;">Critical (Red)</span>
+                <span id="sbAlertCriticalCount" style="font-size: 13px; font-weight: bold; color: #ef4444;">0</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(245, 158, 11, 0.08); border-left: 4px solid #f59e0b; border-radius: 4px;">
+                <span style="font-weight: bold; color: #fde047; font-size: 11px;">Warning (Yellow)</span>
+                <span id="sbAlertWarningCount" style="font-size: 13px; font-weight: bold; color: #f59e0b;">0</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(16, 185, 129, 0.08); border-left: 4px solid #10b981; border-radius: 4px;">
+                <span style="font-weight: bold; color: #a7f3d0; font-size: 11px;">Normal (Green)</span>
+                <span id="sbAlertNormalCount" style="font-size: 13px; font-weight: bold; color: #10b981;">0</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div style="width: 100%; position: relative; height: 260px; margin-top: 15px;">
-          <h3 id="chartZTitle" style="font-size: 14px; margin-bottom: 6px; font-weight: bold; text-align: center;">Z Axis</h3>
-          <canvas id="chartZ"></canvas>
-          <div class="chart-controls" style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px; z-index: 100;">
-            <button onclick="zoomChart('Z', 1.15)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-plus-lg"></i></button>
-            <button onclick="zoomChart('Z', 0.85)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-dash-lg"></i></button>
-            <button onclick="resetChartZoom('Z')" title="Reset Zoom" style="width: 26px; height: 26px; border-radius: 4px; border: 1px solid #495057; background: #212529; color: #f8f9fa; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"><i class="bi bi-arrow-counterclockwise"></i></button>
+          
+          <div class="sidebar-section">
+            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Peak Telemetry</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px; color: #d1d5db;">
+              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
+                <span>Max G-Force X:</span>
+                <strong id="sbMaxForceX" style="color: #ef4444;">0.00 G</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
+                <span>Max G-Force Y:</span>
+                <strong id="sbMaxForceY" style="color: #10b981;">0.00 G</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
+                <span>Max G-Force Z:</span>
+                <strong id="sbMaxForceZ" style="color: #3b82f6;">0.00 G</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding-bottom: 2px;">
+                <span>Max Speed:</span>
+                <strong id="sbMaxSpeed" style="color: #f3f4f6;">0 km/h</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <h4 style="font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; font-weight: bold;">Configuration</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px; color: #d1d5db;">
+              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
+                <span>Total Data Points:</span>
+                <strong id="sbTotalPoints" style="color: #f3f4f6;">0</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1f2937; padding-bottom: 6px;">
+                <span>Critical Limit:</span>
+                <strong id="sbCritThreshold" style="color: #ef4444;">8.0 G</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding-bottom: 2px;">
+                <span>Warning Limit:</span>
+                <strong id="sbWarnThreshold" style="color: #f59e0b;">5.0 G</strong>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -520,6 +584,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <script src="/static/app.js?v=20260716-zoom-controls-v1"></script>
+  <script src="/static/app.js?v=20260716-graph-sidebar-v1"></script>
 </body>
 </html>

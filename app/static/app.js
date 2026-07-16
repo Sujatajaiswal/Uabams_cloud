@@ -1828,13 +1828,13 @@ async function loadGraphData() {
   
   try {
     const data = await ApiClient.post('/api/reports/graph/load', { rid, fromDate, toDate, metric });
-    if (!data.points || data.points.length === 0) {
+     if (!data.points || data.points.length === 0) {
       alert("No telemetry records found for this train and date range.");
       if (chartXInstance) { chartXInstance.destroy(); chartXInstance = null; }
       if (chartYInstance) { chartYInstance.destroy(); chartYInstance = null; }
       if (chartZInstance) { chartZInstance.destroy(); chartZInstance = null; }
       $('graphMetadataSection').style.display = "none";
-      $('graphCard').style.display = "none";
+      $('graphMainContent').style.display = "none";
       return;
     }
     
@@ -1842,7 +1842,7 @@ async function loadGraphData() {
     $('metaGraphDateRange').textContent = `${DateUtils.formatDisplayDateTime(fromDate)} → ${DateUtils.formatDisplayDateTime(toDate)}`;
     
     $('graphMetadataSection').style.display = "block";
-    $('graphCard').style.display = "block";
+    $('graphMainContent').style.display = "grid";
     
     renderRollingStockChart(data);
   } catch (error) {
@@ -2121,6 +2121,52 @@ function renderRollingStockChart(data) {
     'chartZ', 'chartZTitle', `Z Axis — ${metric} Acceleration (${prefix}_z)`,
     formattedLabels, zData, '#3b82f6', speeds, thresholdRed, thresholdYellow, thresholdGreen, hasDistance, data.points
   );
+
+  // Calculate peaks and anomaly counts for the sidebar
+  let maxSpeed = 0;
+  let maxForceX = 0;
+  let maxForceY = 0;
+  let maxForceZ = 0;
+  
+  let criticalCount = 0;
+  let warningCount = 0;
+  let normalCount = 0;
+
+  for (let i = 0; i < data.points.length; i++) {
+    const pt = data.points[i];
+    const x = pt.axes[`${prefix}_x`] ?? 0.0;
+    const y = pt.axes[`${prefix}_y`] ?? 0.0;
+    const z = pt.axes[`${prefix}_z`] ?? 0.0;
+    const sp = pt.speed ?? 0.0;
+    
+    if (sp > maxSpeed) maxSpeed = sp;
+    if (x > maxForceX) maxForceX = x;
+    if (y > maxForceY) maxForceY = y;
+    if (z > maxForceZ) maxForceZ = z;
+    
+    const maxVal = Math.max(x, y, z);
+    if (maxVal >= thresholdRed) {
+      criticalCount++;
+    } else if (maxVal >= thresholdYellow) {
+      warningCount++;
+    } else {
+      normalCount++;
+    }
+  }
+
+  // Populate sidebar indicators
+  setText('sbAlertCriticalCount', criticalCount);
+  setText('sbAlertWarningCount', warningCount);
+  setText('sbAlertNormalCount', normalCount);
+  
+  setText('sbMaxForceX', `${maxForceX.toFixed(2)} G`);
+  setText('sbMaxForceY', `${maxForceY.toFixed(2)} G`);
+  setText('sbMaxForceZ', `${maxForceZ.toFixed(2)} G`);
+  setText('sbMaxSpeed', `${Math.round(maxSpeed)} km/h`);
+  
+  setText('sbTotalPoints', data.points.length);
+  setText('sbCritThreshold', `${thresholdRed.toFixed(1)} G`);
+  setText('sbWarnThreshold', `${thresholdYellow.toFixed(1)} G`);
 }
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
