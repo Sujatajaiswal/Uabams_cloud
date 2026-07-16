@@ -80,7 +80,11 @@ function gatewayLabel(gatewayId) {
 }
 
 function trainNoValue() {
-  return $('trainNo')?.value.trim() || '';
+  const rawVal = $('trainNo')?.value.trim() || '';
+  if (rawVal.includes(' - ')) {
+    return rawVal.split(' - ')[0].trim();
+  }
+  return rawVal;
 }
 
 
@@ -93,67 +97,21 @@ function recentTrainNumbers() {
   }
 }
 
-let cachedServerTrains = [];
-
 function renderRecentTrainNumbers() {
-  const dropdown = $('trainAutocompleteDropdown');
+  const list = $('recentTrainNos');
   const input = $('trainNo');
 
-  if (!dropdown || !input) return;
+  if (!list || !input) return;
 
   const localTrainNos = recentTrainNumbers();
   
-  const updateDropdownItems = (filterText = '') => {
-    const term = filterText.toLowerCase().trim();
-    
-    const map = new Map();
-    localTrainNos.forEach(no => map.set(no, { trainNo: no, trainName: '' }));
-    cachedServerTrains.forEach(t => map.set(t.trainNo, t));
-    
-    const combinedList = Array.from(map.values());
-    
-    const filteredList = combinedList.filter(t => {
-      return t.trainNo.toLowerCase().includes(term) || (t.trainName && t.trainName.toLowerCase().includes(term));
-    });
-    
-    if (filteredList.length === 0) {
-      dropdown.innerHTML = '<div style="padding: 12px; text-align: center; color: #868e96;">No trains found</div>';
-      return;
-    }
-    
-    let html = `
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 50px;">#</th>
-            <th style="width: 100px;">No</th>
-            <th>Train Name</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-    
-    filteredList.forEach((t, index) => {
-      html += `
-        <tr class="autocomplete-row" data-train-no="${escapeHtml(t.trainNo)}">
-          <td>${index + 1}</td>
-          <td>${escapeHtml(t.trainNo)}</td>
-          <td class="train-link">${escapeHtml(t.trainName || 'Express Train')}</td>
-        </tr>
-      `;
-    });
-    
-    html += '</tbody></table>';
-    dropdown.innerHTML = html;
-    
-    dropdown.querySelectorAll('.autocomplete-row').forEach(row => {
-      row.addEventListener('click', () => {
-        const trainNo = row.dataset.trainNo;
-        input.value = trainNo;
-        dropdown.classList.add('hidden');
-        loadDashboard();
-      });
-    });
+  const renderList = (trainObjects) => {
+    list.innerHTML = trainObjects
+      .map((t) => {
+        const label = t.trainName ? `${t.trainNo} - ${t.trainName}` : t.trainNo;
+        return `<option value="${escapeHtml(label)}"></option>`;
+      })
+      .join('');
   };
 
   if (!input.value) {
@@ -168,27 +126,22 @@ function renderRecentTrainNumbers() {
     .then((res) => res.json())
     .then((serverTrains) => {
       if (Array.isArray(serverTrains)) {
-        cachedServerTrains = serverTrains;
-        updateDropdownItems(input.value);
+        const map = new Map();
+        localTrainNos.forEach(no => map.set(no, { trainNo: no, trainName: '' }));
+        serverTrains.forEach(t => map.set(t.trainNo, t));
+        const combined = Array.from(map.values());
+        
+        combined.forEach(item => {
+          if (!item.trainName) {
+            const serverMatch = serverTrains.find(s => s.trainNo === item.trainNo);
+            if (serverMatch) item.trainName = serverMatch.trainName;
+          }
+        });
+        
+        renderList(combined);
       }
     })
     .catch((err) => console.error('Failed to load train list:', err));
-
-  input.addEventListener('focus', () => {
-    updateDropdownItems(input.value);
-    dropdown.classList.remove('hidden');
-  });
-
-  input.addEventListener('input', () => {
-    updateDropdownItems(input.value);
-    dropdown.classList.remove('hidden');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#trainNo') && !e.target.closest('#trainAutocompleteDropdown')) {
-      dropdown.classList.add('hidden');
-    }
-  });
 }
 
 function rememberTrainNumber(trainNo) {
