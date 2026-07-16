@@ -91,7 +91,14 @@ function trainNoValue() {
 function recentTrainNumbers() {
   try {
     const values = JSON.parse(localStorage.getItem(recentTrainStorageKey) || '[]');
-    return Array.isArray(values) ? values.filter(Boolean) : [];
+    if (!Array.isArray(values)) return [];
+    return values.map(val => {
+      if (typeof val === 'object' && val !== null) {
+        return val.trainNo || '';
+      }
+      return String(val || '');
+    })
+    .filter(val => val && val !== 'object Object' && val !== '[object Object]');
   } catch {
     return [];
   }
