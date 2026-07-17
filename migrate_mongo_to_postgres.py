@@ -134,6 +134,34 @@ async def migrate_collection(mongo_db, pg_pool, col_name):
                         val = doc.get("sessionId")
                     if val is None and col == "train_no":
                         val = doc.get("trainNo")
+                    if col == "train_name" and (not val):
+                        train_no = doc.get("trainNo") or doc.get("train_no") or ""
+                        if train_no == "019456":
+                            val = "Gatimaan Express"
+                        elif "TR_" in train_no:
+                            try:
+                                num = int(train_no.split("_")[1])
+                                names_pool = [
+                                    "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
+                                    "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
+                                    "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
+                                ]
+                                val = names_pool[num % len(names_pool)]
+                            except Exception:
+                                val = "Express Train"
+                        elif train_no:
+                            try:
+                                num = int(train_no)
+                                names_pool = [
+                                    "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
+                                    "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
+                                    "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
+                                ]
+                                val = names_pool[num % len(names_pool)]
+                            except Exception:
+                                val = "Express Train"
+                        else:
+                            val = "Express Train"
                         
                     if isinstance(val, (dict, list)):
                         val = json.dumps(val)
@@ -182,8 +210,8 @@ async def main():
             ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
             ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
         """)
-        # Clear alert_events, archives, gateway_status, and peak_records so they are re-migrated cleanly with the new columns populated
-        await conn.execute("TRUNCATE TABLE alert_events, archives, gateway_status, peak_records RESTART IDENTITY;")
+        # Clear alert_events, archives, gateway_status, peak_records, and trains so they are re-migrated cleanly with the new columns populated
+        await conn.execute("TRUNCATE TABLE alert_events, archives, gateway_status, peak_records, trains RESTART IDENTITY;")
 
     mongo_client = AsyncIOMotorClient(MONGO_URL)
     mongo_db = mongo_client[DATABASE_NAME]

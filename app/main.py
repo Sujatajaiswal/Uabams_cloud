@@ -1155,6 +1155,34 @@ async def save_calibration(
     return {"status": "success", "message": "Calibration saved", "calibration": serialize(document)}
 
 
+def generate_train_name(no: str) -> str:
+    if not no:
+        return "Express Train"
+    if no == "019456":
+        return "Gatimaan Express"
+    if "TR_" in no:
+        try:
+            num = int(no.split("_")[1])
+            names_pool = [
+                "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
+                "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
+                "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
+            ]
+            return names_pool[num % len(names_pool)]
+        except Exception:
+            return "Express Train"
+    try:
+        num = int(no)
+        names_pool = [
+            "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
+            "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
+            "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
+        ]
+        return names_pool[num % len(names_pool)]
+    except Exception:
+        return "Express Train"
+
+
 @app.get("/api/v1/trains")
 async def list_trains():
     trains_cursor = db.trains.find({}, {"_id": 0, "trainNo": 1, "trainName": 1})
@@ -1167,21 +1195,7 @@ async def list_trains():
             continue
         name = t.get("trainName") or ""
         if not name:
-            if no == "019456":
-                name = "Gatimaan Express"
-            elif "TR_" in no:
-                try:
-                    num = int(no.split("_")[1])
-                    names_pool = [
-                        "Rajdhani Express", "Shatabdi Express", "Duronto Express", 
-                        "Garib Rath", "HumSafar Express", "Vande Bharat Express", 
-                        "Tejas Express", "Jan Shatabdi", "Sampark Kranti", "Superfast Mail"
-                    ]
-                    name = names_pool[num % len(names_pool)]
-                except Exception:
-                    name = "Express Train"
-            else:
-                name = "Express Train"
+            name = generate_train_name(no)
         
         display_no = no.replace("TR_", "") if no.startswith("TR_") else no
         unique_trains[display_no] = {
@@ -1619,7 +1633,7 @@ async def mark_gateway_online(gateway_id: str, train_id: str, now: datetime) -> 
         {
             "$set": {"trainNo": train_id, "status": "running", "updatedAt": now},
             "$addToSet": {"gateways": gateway_id},
-            "$setOnInsert": {"trainName": "", "createdAt": now},
+            "$setOnInsert": {"trainName": generate_train_name(train_id), "createdAt": now},
         },
         upsert=True,
     )
