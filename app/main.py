@@ -393,6 +393,16 @@ async def startup() -> None:
                     train_name VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_name VARCHAR(100);
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archive_sha256 VARCHAR(64);
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS source VARCHAR(50);
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS peak_axis VARCHAR(10);
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS peak_value_g DOUBLE PRECISION;
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS alert VARCHAR(20);
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_status VARCHAR(50) DEFAULT 'active';
+                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITH TIME ZONE;
+                ALTER TABLE archives ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
             """)
 
     await db.gateways.create_index("gatewayId", unique=True)

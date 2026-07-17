@@ -30,6 +30,7 @@ FIELD_MAP = {
     "offsetY": "offset_y",
     "offsetZ": "offset_z",
     "trainNo": "train_no",
+    "trainName": "train_name",
     "alertType": "alert_type",
     "positionMm": "position_mm",
     "receivedAt": "received_at",
@@ -47,6 +48,11 @@ FIELD_MAP = {
     "fileId": "file_id",
     "chunkIndex": "chunk_index",
     "chunkData": "chunk_data",
+    "peakAxis": "peak_axis",
+    "peakValueG": "peak_value_g",
+    "speedKmph": "speed_kmph",
+    "sessionStatus": "session_status",
+    "archivedAt": "archived_at",
 }
 
 REV_MAP = {v: k for k, v in FIELD_MAP.items()}
@@ -64,8 +70,11 @@ TABLE_COLUMNS = {
     "calibration_versions": [
         "gateway_id", "version", "scale_x", "scale_y", "scale_z", "offset_x", "offset_y", "offset_z", "created_at"
     ],
-    "alert_events": ["train_no", "gateway_id", "alert_type", "latitude", "longitude", "position_mm", "created_at"],
-    "archives": ["gateway_id", "sha256", "received_at"],
+    "alert_events": [
+        "train_no", "gateway_id", "alert_type", "latitude", "longitude", "position_mm", "created_at",
+        "session_name", "archive_sha256", "source", "peak_axis", "peak_value_g", "speed_kmph", "alert", "session_status", "archived_at"
+    ],
+    "archives": ["gateway_id", "sha256", "received_at", "train_id"],
     "rms_records": [
         "train_id", "gateway_id", "session_name", "archive_sha256", "latitude", "longitude", "gps_valid",
         "bearing", "speed", "position_mm", "axes", "created_at"
