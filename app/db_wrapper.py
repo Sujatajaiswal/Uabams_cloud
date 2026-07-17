@@ -470,6 +470,64 @@ class CollectionWrapper:
     async def create_index(self, *args, **kwargs):
         pass
 
+    def aggregate(self, pipeline):
+        match_stage = None
+        for stage in pipeline:
+            if "$match" in stage:
+                match_stage = stage["$match"]
+                
+        from_dt = None
+        to_dt = None
+        if match_stage and "createdAt" in match_stage:
+            created_at_filter = match_stage["createdAt"]
+            if isinstance(created_at_filter, dict):
+                from_dt = created_at_filter.get("$gte")
+                to_dt = created_at_filter.get("$lte")
+                
+        return AggregateCursorWrapper(self, from_dt, to_dt)
+
+
+class AggregateCursorWrapper:
+    def __init__(self, collection, from_dt, to_dt):
+        self.collection = collection
+        self.from_dt = from_dt
+        self.to_dt = to_dt
+        
+    async def to_list(self, length=None):
+        if self.from_dt is None or self.to_dt is None:
+            return []
+            
+        sql = """
+            WITH latest_alerts AS (
+                SELECT 
+                    train_no,
+                    latitude,
+                    longitude,
+                    ROW_NUMBER() OVER (PARTITION BY train_no ORDER BY created_at DESC) as rn
+                FROM alert_events
+                WHERE created_at >= $1 AND created_at <= $2
+            ),
+            counts AS (
+                SELECT 
+                    train_no,
+                    COUNT(*) as count
+                FROM alert_events
+                WHERE created_at >= $1 AND created_at <= $2
+                GROUP BY train_no
+            )
+            SELECT 
+                c.train_no AS "_id",
+                c.count,
+                l.latitude,
+                l.longitude
+            FROM counts c
+            JOIN latest_alerts l ON c.train_no = l.train_no AND l.rn = 1
+            ORDER BY c.count DESC
+        """
+        async with self.collection.pg_pool.acquire() as conn:
+            rows = await conn.fetch(sql, self.from_dt, self.to_dt)
+        return [dict(row) for row in rows]
+
 
 class DatabaseWrapper:
     def __init__(self, db_type, motor_db=None, pg_pool=None):
