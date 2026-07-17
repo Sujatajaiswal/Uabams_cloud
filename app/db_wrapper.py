@@ -10,6 +10,7 @@ FIELD_MAP = {
     "gatewayId": "gateway_id",
     "trainId": "train_id",
     "lastHeartbeat": "last_heartbeat",
+    "lastHandshake": "last_handshake",
     "apiKey": "secret_key",
     "createdAt": "created_at",
     "adxlState": "adxl_state",
@@ -62,7 +63,8 @@ TABLE_COLUMNS = {
     "gateway_auth": ["gateway_id", "secret_key", "created_at"],
     "gateway_status": [
         "gateway_id", "adxl_state", "adxl_uptime", "adxl_faults", "adxl_fw_version", "adxl_cal_version",
-        "encoder_state", "encoder_uptime", "encoder_faults", "encoder_fw_version", "encoder_cal_version", "updated_at"
+        "encoder_state", "encoder_uptime", "encoder_faults", "encoder_fw_version", "encoder_cal_version", "updated_at",
+        "train_id", "online", "last_heartbeat", "last_handshake"
     ],
     "calibrations": [
         "gateway_id", "scale_x", "scale_y", "scale_z", "offset_x", "offset_y", "offset_z", "updated_at"

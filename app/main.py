@@ -403,6 +403,10 @@ async def startup() -> None:
                 ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_status VARCHAR(50) DEFAULT 'active';
                 ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITH TIME ZONE;
                 ALTER TABLE archives ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
+                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
+                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS online BOOLEAN DEFAULT FALSE;
+                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMP WITH TIME ZONE;
+                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_handshake TIMESTAMP WITH TIME ZONE;
             """)
 
     await db.gateways.create_index("gatewayId", unique=True)
