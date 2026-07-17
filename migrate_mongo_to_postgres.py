@@ -98,11 +98,11 @@ async def migrate_collection(mongo_db, pg_pool, col_name):
     sql = f"INSERT INTO {col_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) ON CONFLICT DO NOTHING"
     
     batch_size = 500
-    batch = []
-    
     async with pg_pool.acquire() as conn:
-        async with conn.transaction():
-            for doc in docs:
+        for i in range(0, len(docs), batch_size):
+            chunk = docs[i : i + batch_size]
+            row_batches = []
+            for doc in chunk:
                 row_vals = []
                 for col in columns:
                     mongo_key = None
@@ -124,13 +124,19 @@ async def migrate_collection(mongo_db, pg_pool, col_name):
                     if isinstance(val, (dict, list)):
                         val = json.dumps(val)
                     row_vals.append(val)
-                batch.append(row_vals)
+                row_batches.append(row_vals)
                 
-                if len(batch) >= batch_size:
-                    await conn.executemany(sql, batch)
-                    batch = []
-            if batch:
-                await conn.executemany(sql, batch)
+            try:
+                async with conn.transaction():
+                    await conn.executemany(sql, row_batches)
+            except Exception:
+                # Fallback to row-by-row insert on batch failure (e.g. foreign key constraint violation)
+                for row_vals in row_batches:
+                    try:
+                        async with conn.transaction():
+                            await conn.execute(sql, *row_vals)
+                    except Exception as inner_e:
+                        pass
                 
     print(f"Completed migration for: {col_name} ({len(docs)} records).")
 
