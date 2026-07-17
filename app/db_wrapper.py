@@ -10,7 +10,7 @@ FIELD_MAP = {
     "gatewayId": "gateway_id",
     "trainId": "train_id",
     "lastHeartbeat": "last_heartbeat",
-    "secretKey": "secret_key",
+    "apiKey": "secret_key",
     "createdAt": "created_at",
     "adxlState": "adxl_state",
     "adxlUptime": "adxl_uptime",
