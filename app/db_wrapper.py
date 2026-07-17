@@ -81,7 +81,10 @@ TABLE_COLUMNS = {
         "train_id", "gateway_id", "session_name", "archive_sha256", "latitude", "longitude", "gps_valid",
         "bearing", "speed", "position_mm", "axes", "created_at"
     ],
-    "peak_records": ["train_id", "gateway_id", "archive_sha256", "window_start_mm", "axes", "created_at"],
+    "peak_records": [
+        "train_id", "gateway_id", "archive_sha256", "window_start_mm", "axes", "created_at",
+        "position_mm", "speed_kmph", "latitude", "longitude"
+    ],
     "fault_records": ["train_id", "gateway_id", "archive_sha256", "timestamp_ms", "fault_code", "description", "created_at"],
     "sessions": ["train_no", "session_name", "status", "created_at"],
     "reset_events": ["train_no", "reason", "created_at"],
@@ -129,7 +132,7 @@ def translate_filter(table_name, mongo_filter):
                     if val is None:
                         where_clauses.append(f"{pg_col} IS NOT NULL")
                     else:
-                        where_clauses.append(f"{pg_col} <> ${param_name}")
+                        where_clauses.append(f"({pg_col} IS NULL OR {pg_col} <> ${param_name})")
                         params[param_name] = val
                 elif op == "$in":
                     placeholders = []

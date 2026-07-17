@@ -85,7 +85,10 @@ TABLE_COLUMNS = {
         "train_id", "gateway_id", "session_name", "archive_sha256", "latitude", "longitude", "gps_valid",
         "bearing", "speed", "position_mm", "axes", "created_at"
     ],
-    "peak_records": ["train_id", "gateway_id", "archive_sha256", "window_start_mm", "axes", "created_at"],
+    "peak_records": [
+        "train_id", "gateway_id", "archive_sha256", "window_start_mm", "axes", "created_at",
+        "position_mm", "speed_kmph", "latitude", "longitude"
+    ],
     "fault_records": ["train_id", "gateway_id", "archive_sha256", "timestamp_ms", "fault_code", "description", "created_at"],
     "sessions": ["train_no", "session_name", "status", "created_at"],
     "reset_events": ["train_no", "reason", "created_at"],
@@ -174,9 +177,13 @@ async def main():
             ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS online BOOLEAN DEFAULT FALSE;
             ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMP WITH TIME ZONE;
             ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_handshake TIMESTAMP WITH TIME ZONE;
+            ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS position_mm INTEGER;
+            ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
+            ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+            ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
         """)
-        # Clear alert_events, archives, and gateway_status so they are re-migrated cleanly with the new columns populated
-        await conn.execute("TRUNCATE TABLE alert_events, archives, gateway_status RESTART IDENTITY;")
+        # Clear alert_events, archives, gateway_status, and peak_records so they are re-migrated cleanly with the new columns populated
+        await conn.execute("TRUNCATE TABLE alert_events, archives, gateway_status, peak_records RESTART IDENTITY;")
 
     mongo_client = AsyncIOMotorClient(MONGO_URL)
     mongo_db = mongo_client[DATABASE_NAME]
