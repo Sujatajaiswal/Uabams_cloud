@@ -382,6 +382,19 @@ def verify_gateway_token(token: str, gateway_id: str) -> dict[str, Any]:
 
 @app.on_event("startup")
 async def startup() -> None:
+    if settings["database_type"] == "postgres":
+        import asyncpg
+        pool = await asyncpg.create_pool(settings["database_url"])
+        db.pg_pool = pool
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS trains (
+                    train_no VARCHAR(50) PRIMARY KEY,
+                    train_name VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
     await db.gateways.create_index("gatewayId", unique=True)
     await db.gateways.create_index("trainId")
     await db.gateway_auth.create_index("gatewayId", unique=True)
