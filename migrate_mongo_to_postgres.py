@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncpg
 
-load_dotenv()
+load_dotenv(override=True)
 
 MONGO_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "uabams")

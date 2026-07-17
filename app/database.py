@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.db_wrapper import DatabaseWrapper
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 @lru_cache
