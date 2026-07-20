@@ -894,10 +894,8 @@ def location_box(latitude: float, longitude: float, radius_meters: float) -> dic
 async def upload_archive(
     request: Request,
     archive_body: Annotated[bytes, Body(media_type="application/octet-stream")],
-    x_api_key: Annotated[str | None, Header(alias="X-Api-Key")] = None,
+    x_api_key: Annotated[str, Header(alias="X-Api-Key")],
     x_sha256: Annotated[str | None, Header(alias="X-Sha256")] = None,
-    x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
-    x_session_iv: Annotated[str | None, Header(alias="X-Session-Iv")] = None,
 ):
     gateway_id = request.state.gateway_id
     expected_sha256 = x_sha256 or request.headers.get("X-Archive-Sha256")
@@ -907,16 +905,6 @@ async def upload_archive(
         raise HTTPException(status_code=400, detail="SHA-256 mismatch")
 
     body = archive_body
-    if x_session_id:
-        if not hasattr(request.state, "session_key"):
-            raise HTTPException(status_code=401, detail="Session key not found in request state")
-        if not x_session_iv:
-            raise HTTPException(status_code=400, detail="Missing X-Session-Iv header for encrypted payload")
-        try:
-            aesgcm = AESGCM(request.state.session_key)
-            body = aesgcm.decrypt(bytes.fromhex(x_session_iv), archive_body, None)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Failed to decrypt payload: {exc}")
 
     try:
         parsed = parse_archive_zip(body)

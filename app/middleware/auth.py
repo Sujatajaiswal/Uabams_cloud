@@ -41,24 +41,12 @@ class GatewayAuthMiddleware(BaseHTTPMiddleware):
             api_key = request.headers.get("X-Api-Key")
             session_id = request.headers.get("X-Session-Id")
 
-            if session_id:
-                from app.database import db
-                session = await db.handshake_sessions.find_one({"sessionId": session_id})
-                if not session or not session.get("verified"):
-                    return JSONResponse(
-                        status_code=403,
-                        content={"detail": "Invalid or expired session"},
-                    )
-                gateway_id = session["gatewayId"]
-                request.state.gateway_id = gateway_id
-                request.state.train_id = train_id
-                request.state.session_id = session_id
-                request.state.session_key = bytes.fromhex(session["sessionKeyHex"])
-            else:
+            # For archive uploads, strictly enforce API key authentication
+            if request.url.path.startswith("/api/v1/archive") or not session_id:
                 if not api_key:
                     return JSONResponse(
                         status_code=401,
-                        content={"detail": "Missing gateway API key"},
+                        content={"detail": "Missing gateway API key header (X-Api-Key)"},
                     )
 
                 gateway_id = gateway_id_for_key(api_key)
@@ -71,6 +59,19 @@ class GatewayAuthMiddleware(BaseHTTPMiddleware):
                 request.state.gateway_id = gateway_id
                 request.state.train_id = train_id
                 request.state.api_key = api_key
+            else:
+                from app.database import db
+                session = await db.handshake_sessions.find_one({"sessionId": session_id})
+                if not session or not session.get("verified"):
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": "Invalid or expired session"},
+                    )
+                gateway_id = session["gatewayId"]
+                request.state.gateway_id = gateway_id
+                request.state.train_id = train_id
+                request.state.session_id = session_id
+                request.state.session_key = bytes.fromhex(session["sessionKeyHex"])
 
             if supplied_gateway_id and supplied_gateway_id != gateway_id:
                 return JSONResponse(
