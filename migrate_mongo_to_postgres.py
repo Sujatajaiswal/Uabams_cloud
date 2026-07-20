@@ -162,6 +162,19 @@ async def migrate_collection(mongo_db, pg_pool, col_name):
                                 val = "Express Train"
                         else:
                             val = "Express Train"
+                    if col == "speed" and val is None:
+                        val = doc.get("speedKmph")
+                    if col == "position_mm" and (val is None or val == 0):
+                        val = doc.get("positionMm") or doc.get("position_mm")
+                    if col == "axes" and (val is None or not val):
+                        axes_dict = {}
+                        axis_names = ["al_x", "al_y", "al_z", "ar_x", "ar_y", "ar_z", "bg_x", "bg_y", "bg_z"]
+                        for axis in axis_names:
+                            for suffix in ["_g", "_mg"]:
+                                k = f"{axis}{suffix}"
+                                if k in doc:
+                                    axes_dict[k] = doc[k]
+                        val = axes_dict if axes_dict else None
                         
                     if isinstance(val, (dict, list)):
                         val = json.dumps(val)
@@ -210,8 +223,8 @@ async def main():
             ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
             ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
         """)
-        # Clear alert_events, archives, gateway_status, peak_records, and trains so they are re-migrated cleanly with the new columns populated
-        await conn.execute("TRUNCATE TABLE alert_events, archives, gateway_status, peak_records, trains RESTART IDENTITY;")
+        # Clear alert_events, archives, gateway_status, peak_records, trains, and rms_records so they are re-migrated cleanly with the new columns populated
+        await conn.execute("TRUNCATE TABLE alert_events, archives, gateway_status, peak_records, trains, rms_records RESTART IDENTITY;")
 
     mongo_client = AsyncIOMotorClient(MONGO_URL)
     mongo_db = mongo_client[DATABASE_NAME]

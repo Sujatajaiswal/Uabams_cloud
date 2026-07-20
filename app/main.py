@@ -2123,16 +2123,20 @@ async def load_graph_report(data: GraphDataRequest, request: Request):
         for r in records:
             dt = r.get("createdAt")
             timestamp_str = dt.strftime("%d-%m-%Y %H:%M:%S") if dt else "-"
-            pos_mm = r.get("positionMm") or 0
+            pos_mm = r.get("positionMm") or r.get("position_mm") or 0
             pos_km = round(pos_mm / 1000000.0, 4)
             
             axes_data = {}
+            axes_dict = r.get("axes") if isinstance(r.get("axes"), dict) else {}
             for axis_name in AXIS_NAMES:
-                axes_data[axis_name] = r.get(f"{axis_name}_g") or 0.0
+                val = r.get(f"{axis_name}_g")
+                if val is None:
+                    val = axes_dict.get(f"{axis_name}_g")
+                axes_data[axis_name] = float(val) if val is not None else 0.0
                 
             points.append({
                 "timestamp": timestamp_str,
-                "speed": r.get("speedKmph") or 0.0,
+                "speed": r.get("speedKmph") or r.get("speed") or 0.0,
                 "positionKm": pos_km,
                 "latitude": r.get("latitude"),
                 "longitude": r.get("longitude"),

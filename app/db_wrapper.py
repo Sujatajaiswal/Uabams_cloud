@@ -219,11 +219,15 @@ class CollectionWrapper:
             if col == "id":
                 mapped["_id"] = str(val)
                 continue
-            if col == "axes" and isinstance(val, str):
-                try:
-                    val = json.loads(val)
-                except Exception:
-                    pass
+            if col == "axes":
+                if isinstance(val, str):
+                    try:
+                        val = json.loads(val)
+                    except Exception:
+                        pass
+                if isinstance(val, dict):
+                    for k, v in val.items():
+                        mapped[k] = v
             mapped_key = REV_MAP.get(col, col)
             mapped[mapped_key] = val
         return mapped
