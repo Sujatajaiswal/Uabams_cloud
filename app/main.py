@@ -394,34 +394,37 @@ def verify_gateway_token(token: str, gateway_id: str) -> dict[str, Any]:
 async def startup() -> None:
     if settings["database_type"] == "postgres":
         import asyncpg
-        pool = await asyncpg.create_pool(settings["database_url"])
-        db.pg_pool = pool
-        async with pool.acquire() as conn:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS trains (
-                    train_no VARCHAR(50) PRIMARY KEY,
-                    train_name VARCHAR(255) NOT NULL,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_name VARCHAR(100);
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archive_sha256 VARCHAR(64);
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS source VARCHAR(50);
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS peak_axis VARCHAR(10);
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS peak_value_g DOUBLE PRECISION;
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS alert VARCHAR(20);
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_status VARCHAR(50) DEFAULT 'active';
-                ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITH TIME ZONE;
-                ALTER TABLE archives ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
-                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
-                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS online BOOLEAN DEFAULT FALSE;
-                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMP WITH TIME ZONE;
-                ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_handshake TIMESTAMP WITH TIME ZONE;
-                ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS position_mm INTEGER;
-                ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
-                ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
-                ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
-            """)
+        try:
+            pool = await asyncpg.create_pool(settings["database_url"])
+            db.pg_pool = pool
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS trains (
+                        train_no VARCHAR(50) PRIMARY KEY,
+                        train_name VARCHAR(255) NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_name VARCHAR(100);
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archive_sha256 VARCHAR(64);
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS source VARCHAR(50);
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS peak_axis VARCHAR(10);
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS peak_value_g DOUBLE PRECISION;
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS alert VARCHAR(20);
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_status VARCHAR(50) DEFAULT 'active';
+                    ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITH TIME ZONE;
+                    ALTER TABLE archives ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
+                    ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
+                    ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS online BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMP WITH TIME ZONE;
+                    ALTER TABLE gateway_status ADD COLUMN IF NOT EXISTS last_handshake TIMESTAMP WITH TIME ZONE;
+                    ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS position_mm INTEGER;
+                    ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
+                    ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+                    ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+                """)
+        except Exception as exc:
+            print(f"Warning: Failed to connect to PostgreSQL: {exc}")
 
     await db.gateways.create_index("gatewayId", unique=True)
     await db.gateways.create_index("trainId")
