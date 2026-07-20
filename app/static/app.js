@@ -413,6 +413,11 @@ function renderDashboard(data) {
   const userRole = data.userRole || 'operator';
   const internalTabs = ['calibration', 'archives', 'reset', 'logs'];
   
+  const swaggerBtn = document.getElementById('swaggerBtn') || document.querySelector('a[href="/docs"]');
+  if (swaggerBtn) {
+    swaggerBtn.style.display = (userRole === 'admin') ? '' : 'none';
+  }
+
   document.querySelectorAll('.tab').forEach((button) => {
     const tabId = button.dataset.tab;
     if (internalTabs.includes(tabId)) {

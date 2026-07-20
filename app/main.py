@@ -16,7 +16,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from bson import ObjectId
 from fastapi import Body, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -43,6 +45,9 @@ from app.parsers.archive import parse_archive_zip, peak_records_to_alert_events,
 app = FastAPI(
     title="UABAMS Cloud API",
     version="0.2.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -235,6 +240,11 @@ def operator_session_payload(request: Request) -> dict[str, Any] | None:
 
 def is_operator_authenticated(request: Request) -> bool:
     return operator_session_payload(request) is not None
+
+
+def is_admin_authenticated(request: Request) -> bool:
+    payload = operator_session_payload(request)
+    return payload is not None and payload.get("role") == "admin"
 
 
 def operator_username(request: Request) -> str | None:
@@ -524,6 +534,22 @@ async def dashboard_page(request: Request):
     if not is_operator_authenticated(request):
         return RedirectResponse("/login", status_code=303)
     return FileResponse(Path("app/static/index.html"), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html(request: Request):
+    if not is_admin_authenticated(request):
+        if is_operator_authenticated(request):
+            return RedirectResponse(url="/dashboard", status_code=303)
+        return RedirectResponse(url="/login", status_code=303)
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="UABAMS Cloud API - Swagger")
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def get_open_api_endpoint(request: Request):
+    if not is_admin_authenticated(request):
+        raise HTTPException(status_code=403, detail="Admin access required for API documentation")
+    return JSONResponse(get_openapi(title=app.title, version=app.version, routes=app.routes))
 
 
 @app.post("/api/v1/logs")
