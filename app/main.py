@@ -690,6 +690,25 @@ async def root():
     return {"message": "UABAMS Cloud Running", "dashboard": "/dashboard", "login": "/login", "docs": "/docs"}
 
 
+@app.get("/health")
+async def health_check():
+    try:
+        # Perform a test query on gateway_auth collection/table
+        await db.gateway_auth.find_one({"gatewayId": "health_check_test_id"})
+        return {
+            "status": "healthy",
+            "database_type": db.db_type,
+            "connection": "connected"
+        }
+    except Exception as exc:
+        return {
+            "status": "unhealthy",
+            "database_type": db.db_type,
+            "connection": "failed",
+            "error": str(exc)
+        }
+
+
 @app.get("/login")
 async def login_page(request: Request):
     if is_operator_authenticated(request):
