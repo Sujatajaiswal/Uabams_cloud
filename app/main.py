@@ -953,6 +953,11 @@ async def handshake(data: HandshakeRequest, request: Request):
 
 @app.post("/api/v1/handshake/hello", response_model=HandshakeHelloResponse)
 async def handshake_hello(data: HandshakeHelloRequest):
+    try:
+        bytes.fromhex(data.clientPublicKey)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid clientPublicKey hex format. Please provide a valid 130-character hex string (SECP256R1 uncompressed point starting with 04).")
+
     gateway = await db.gateways.find_one({"gatewayId": data.gatewayId})
     if not gateway:
         raise HTTPException(status_code=404, detail="Gateway not registered")

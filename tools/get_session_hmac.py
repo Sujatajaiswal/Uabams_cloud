@@ -33,14 +33,21 @@ async def get_hmac(session_id: str):
         return
 
     # 1. Load keys
-    server_private_key = serialization.load_der_private_key(
-        bytes.fromhex(row["server_private_key_hex"]),
-        password=None
-    )
-    client_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
-        ec.SECP256R1(),
-        bytes.fromhex(row["client_public_key_hex"])
-    )
+    try:
+        server_private_key = serialization.load_der_private_key(
+            bytes.fromhex(row["server_private_key_hex"]),
+            password=None
+        )
+        client_pub_bytes = bytes.fromhex(row["client_public_key_hex"])
+        client_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+            ec.SECP256R1(),
+            client_pub_bytes
+        )
+    except Exception as exc:
+        print(f"\nError decoding public/private keys for session [{session_id}]: {exc}")
+        print("Cause: The clientPublicKey saved during /handshake/hello was literal 'string' or malformed.")
+        print("Fix: Run /api/v1/handshake/hello again and replace 'string' with a valid 130-character hex public key!")
+        return
 
     # 2. Compute Shared Secret & Derive Session Key
     shared_secret = server_private_key.exchange(ec.ECDH(), client_public_key)
