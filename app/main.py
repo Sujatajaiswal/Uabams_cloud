@@ -998,23 +998,25 @@ async def handshake_verify(data: HandshakeVerifyRequest):
 
 @app.post("/api/v1/authenticate")
 async def authenticate(data: AuthRequest):
-    gateway_auth = await db.gateway_auth.find_one({"gatewayId": data.gatewayId})
+    gateway_id = normalize_gateway_id(data.gatewayId) or data.gatewayId
+    auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id}) or await db.gateway_auth.find_one({"secret_key": data.apiKey})
 
-    if not gateway_auth:
+    if not auth_doc:
         return {"status": "failed", "message": "Gateway not found"}
 
-    if gateway_auth["apiKey"] != data.apiKey:
+    stored_key = auth_doc.get("apiKey") or auth_doc.get("secret_key")
+    if stored_key != data.apiKey:
         return {"status": "failed", "message": "Invalid API Key"}
 
-    gateway = await db.gateways.find_one({"gatewayId": data.gatewayId})
-    token = create_gateway_token(data.gatewayId, gateway.get("trainId") if gateway else None)
+    gateway = await db.gateways.find_one({"gatewayId": gateway_id})
+    token = create_gateway_token(gateway_id, gateway.get("trainId") if gateway else None)
 
     await db.gateway_auth.update_one(
-        {"gatewayId": data.gatewayId},
+        {"gatewayId": gateway_id},
         {"$set": {"lastAuthenticated": utc_now()}},
     )
 
-    return {"status": "authenticated", "token": token}
+    return {"status": "authenticated", "token": token, "gatewayId": gateway_id}
 
 
 @app.post("/api/v1/gateway/demo-connect", response_model=GatewayConnectionResponse)
