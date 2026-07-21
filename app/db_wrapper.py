@@ -406,7 +406,9 @@ class CollectionWrapper:
             
         if upsert:
             pk_col = "id"
-            if self.table_name in ["gateways", "gateway_auth", "gateway_status", "calibrations"]:
+            if self.table_name == "gateway_auth":
+                pk_col = "gateway_id, train_id"
+            elif self.table_name in ["gateways", "gateway_status", "calibrations"]:
                 pk_col = "gateway_id"
             elif self.table_name == "handshake_sessions":
                 pk_col = "session_id"

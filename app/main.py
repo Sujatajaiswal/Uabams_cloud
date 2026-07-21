@@ -833,7 +833,7 @@ async def handshake(data: HandshakeRequest, request: Request):
             upsert=True,
         )
 
-        auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id})
+        auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id, "trainId": data.trainId})
         api_key = None
         if auth_doc:
             api_key = auth_doc.get("apiKey") or auth_doc.get("secret_key")
@@ -841,10 +841,11 @@ async def handshake(data: HandshakeRequest, request: Request):
             api_key = token_hex(32)
 
         await db.gateway_auth.update_one(
-            {"gatewayId": gateway_id},
+            {"gatewayId": gateway_id, "trainId": data.trainId},
             {
                 "$set": {
                     "gatewayId": gateway_id,
+                    "trainId": data.trainId,
                     "apiKey": api_key,
                     "secret_key": api_key,
                     "lastHandshake": now,
