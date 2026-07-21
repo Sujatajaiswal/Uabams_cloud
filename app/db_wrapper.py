@@ -425,6 +425,14 @@ class CollectionWrapper:
             for k, v in set_fields.items():
                 insert_data[k] = v
                 
+            on_insert_data = update_dict.get("$setOnInsert", {})
+            for k, v in on_insert_data.items():
+                pg_col = FIELD_MAP.get(k, k)
+                if pg_col in TABLE_COLUMNS.get(self.table_name, []):
+                    if isinstance(v, (dict, list)):
+                        v = json.dumps(v)
+                    insert_data[pg_col] = v
+                
             cols = list(insert_data.keys())
             placeholders = [f"${i+1}" for i in range(len(cols))]
             
