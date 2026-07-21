@@ -58,6 +58,10 @@ FIELD_MAP = {
     "firmwareVersion": "firmware_version",
     "lastSeen": "last_seen",
     "certFingerprint": "cert_fingerprint",
+    "serverPrivateKeyHex": "server_private_key_hex",
+    "clientPublicKeyHex": "client_public_key_hex",
+    "sessionKeyHex": "session_key_hex",
+    "verifiedAt": "verified_at",
 }
 
 REV_MAP = {v: k for k, v in FIELD_MAP.items()}
@@ -93,7 +97,10 @@ TABLE_COLUMNS = {
     "sessions": ["train_no", "session_name", "status", "created_at"],
     "reset_events": ["train_no", "reason", "created_at"],
     "activity_logs": ["username", "page", "action", "error_message", "ip_address", "latitude", "longitude", "created_at"],
-    "handshake_sessions": ["session_id", "created_at"],
+    "handshake_sessions": [
+        "session_id", "gateway_id", "server_private_key_hex", "client_public_key_hex",
+        "nonce", "verified", "session_key_hex", "verified_at", "created_at"
+    ],
     "time_domain_files": ["filename", "sha256", "total_size", "created_at"],
     "time_domain_chunks": ["file_id", "chunk_index", "chunk_data", "created_at"],
     "trains": ["train_no", "train_name", "created_at"]
@@ -237,8 +244,9 @@ class CollectionWrapper:
         row_dict = dict(row)
         mapped = {}
         for col, val in row_dict.items():
-            if col == "id":
+            if col in ("id", "session_id", "gateway_id", "train_no") and "_id" not in mapped:
                 mapped["_id"] = str(val)
+            if col == "id":
                 continue
             if col == "axes":
                 if isinstance(val, str):

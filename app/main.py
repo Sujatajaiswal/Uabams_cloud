@@ -608,6 +608,13 @@ async def startup() -> None:
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP WITH TIME ZONE;
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS gateway_id VARCHAR(100);
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS server_private_key_hex TEXT;
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS client_public_key_hex TEXT;
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS nonce VARCHAR(64);
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS session_key_hex TEXT;
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP WITH TIME ZONE;
                 """)
         except Exception as exc:
             print(f"Warning: Failed to connect to PostgreSQL: {exc}")
@@ -969,7 +976,7 @@ async def handshake_verify(data: HandshakeVerifyRequest):
 
         # 6. Save derived session key & verify session
         await db.handshake_sessions.update_one(
-            {"_id": session["_id"]},
+            {"sessionId": data.sessionId},
             {"$set": {
                 "verified": True,
                 "sessionKeyHex": session_key.hex(),
