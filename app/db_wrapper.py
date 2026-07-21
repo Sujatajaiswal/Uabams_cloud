@@ -54,12 +54,16 @@ FIELD_MAP = {
     "speedKmph": "speed_kmph",
     "sessionStatus": "session_status",
     "archivedAt": "archived_at",
+    "gatewaySerial": "gateway_serial",
+    "firmwareVersion": "firmware_version",
+    "lastSeen": "last_seen",
+    "certFingerprint": "cert_fingerprint",
 }
 
 REV_MAP = {v: k for k, v in FIELD_MAP.items()}
 
 TABLE_COLUMNS = {
-    "gateways": ["gateway_id", "train_id", "last_heartbeat", "status"],
+    "gateways": ["gateway_id", "train_id", "gateway_serial", "firmware_version", "status", "provision_status", "last_seen", "updated_at", "created_at"],
     "gateway_auth": ["gateway_id", "secret_key", "created_at"],
     "gateway_status": [
         "gateway_id", "adxl_state", "adxl_uptime", "adxl_faults", "adxl_fw_version", "adxl_cal_version",
@@ -413,14 +417,20 @@ class CollectionWrapper:
             for col in set_fields.keys():
                 if col != pk_col:
                     update_clauses.append(f"{col} = EXCLUDED.{col}")
-            update_str = ", ".join(update_clauses) if update_clauses else "NOTHING"
-            
-            sql = f"""
-                INSERT INTO {self.table_name} ({', '.join(cols)})
-                VALUES ({', '.join(placeholders)})
-                ON CONFLICT ({pk_col})
-                DO UPDATE SET {update_str}
-            """
+            if update_clauses:
+                sql = f"""
+                    INSERT INTO {self.table_name} ({', '.join(cols)})
+                    VALUES ({', '.join(placeholders)})
+                    ON CONFLICT ({pk_col})
+                    DO UPDATE SET {', '.join(update_clauses)}
+                """
+            else:
+                sql = f"""
+                    INSERT INTO {self.table_name} ({', '.join(cols)})
+                    VALUES ({', '.join(placeholders)})
+                    ON CONFLICT ({pk_col})
+                    DO NOTHING
+                """
             values = [insert_data[c] for c in cols]
             async with self.pg_pool.acquire() as conn:
                 await conn.execute(sql, *values)

@@ -603,6 +603,11 @@ async def startup() -> None:
                     ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
                     ALTER TABLE gateway_auth ADD COLUMN IF NOT EXISTS cert_fingerprint VARCHAR(64);
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS provision_status VARCHAR(20) DEFAULT 'active';
+                    ALTER TABLE gateways ADD COLUMN IF NOT EXISTS gateway_serial VARCHAR(100);
+                    ALTER TABLE gateways ADD COLUMN IF NOT EXISTS firmware_version VARCHAR(50);
+                    ALTER TABLE gateways ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP WITH TIME ZONE;
+                    ALTER TABLE gateways ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;
+                    ALTER TABLE gateways ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
                 """)
         except Exception as exc:
             print(f"Warning: Failed to connect to PostgreSQL: {exc}")
@@ -773,96 +778,107 @@ async def list_activity_logs(request: Request, username: str | None = None, page
 
 @app.post("/api/v1/handshake")
 async def handshake(data: HandshakeRequest, request: Request):
-    now = utc_now()
-    cert_pem = request.headers.get("X-Client-Cert") or data.clientCertPem
-    cert_fingerprint = None
-    cert_gateway_id = None
+    try:
+        now = utc_now()
+        cert_pem = request.headers.get("X-Client-Cert") or data.clientCertPem
+        cert_fingerprint = None
+        cert_gateway_id = None
 
-    if cert_pem:
+        if cert_pem:
+            try:
+                cert_bytes = cert_pem.encode("utf-8")
+                cert_fingerprint = sha256(cert_bytes).hexdigest()
+                from cryptography import x509
+                from cryptography.hazmat.backends import default_backend
+                cert = x509.load_pem_x509_certificate(cert_bytes, default_backend())
+                cn_attributes = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+                if cn_attributes:
+                    cert_gateway_id = cn_attributes[0].value
+            except Exception as exc:
+                print(f"Handshake certificate parsing warning: {exc}")
+
+        gateway_id = cert_gateway_id or data.gatewayId
+
+        await db.gateways.update_one(
+            {"gatewayId": gateway_id},
+            {
+                "$set": {
+                    "gatewayId": gateway_id,
+                    "trainId": data.trainId,
+                    "gatewaySerial": data.gatewaySerial,
+                    "firmwareVersion": data.firmwareVersion,
+                    "status": "active",
+                    "lastSeen": now,
+                    "updatedAt": now,
+                },
+                "$setOnInsert": {"createdAt": now},
+            },
+            upsert=True,
+        )
+
+        auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id})
+        api_key = None
+        if auth_doc:
+            api_key = auth_doc.get("apiKey") or auth_doc.get("secret_key")
+        if not api_key:
+            api_key = token_hex(32)
+
+        await db.gateway_auth.update_one(
+            {"gatewayId": gateway_id},
+            {
+                "$set": {
+                    "gatewayId": gateway_id,
+                    "apiKey": api_key,
+                    "secret_key": api_key,
+                    "lastHandshake": now,
+                    "certFingerprint": cert_fingerprint
+                },
+                "$setOnInsert": {
+                    "createdAt": now,
+                },
+            },
+            upsert=True,
+        )
+
         try:
-            cert_bytes = cert_pem.encode("utf-8")
-            cert_fingerprint = sha256(cert_bytes).hexdigest()
-            from cryptography import x509
-            from cryptography.hazmat.backends import default_backend
-            cert = x509.load_pem_x509_certificate(cert_bytes, default_backend())
-            cn_attributes = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-            if cn_attributes:
-                cert_gateway_id = cn_attributes[0].value
+            await db.trains.update_one(
+                {"trainNo": data.trainId},
+                {
+                    "$set": {"trainNo": data.trainId, "status": "running", "updatedAt": now},
+                    "$setOnInsert": {"trainName": "", "createdAt": now},
+                },
+                upsert=True,
+            )
         except Exception as exc:
-            print(f"Handshake certificate parsing warning: {exc}")
+            print(f"Warning: db.trains update exception: {exc}")
 
-    gateway_id = cert_gateway_id or data.gatewayId
+        try:
+            await db.gateway_status.update_one(
+                {"gatewayId": gateway_id},
+                {
+                    "$set": {
+                        "gatewayId": gateway_id,
+                        "trainId": data.trainId,
+                        "online": True,
+                        "lastHandshake": now,
+                        "lastHeartbeat": now,
+                    }
+                },
+                upsert=True,
+            )
+        except Exception as exc:
+            print(f"Warning: db.gateway_status update exception: {exc}")
 
-    await db.gateways.update_one(
-        {"gatewayId": gateway_id},
-        {
-            "$set": {
-                "gatewayId": gateway_id,
-                "trainId": data.trainId,
-                "gatewaySerial": data.gatewaySerial,
-                "firmwareVersion": data.firmwareVersion,
-                "status": "active",
-                "lastSeen": now,
-                "updatedAt": now,
-            },
-            "$setOnInsert": {"createdAt": now},
-        },
-        upsert=True,
-    )
-
-    auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id})
-    if auth_doc:
-        api_key = auth_doc.get("apiKey") or auth_doc.get("secret_key")
-    else:
-        api_key = token_hex(32)
-
-    await db.gateway_auth.update_one(
-        {"gatewayId": gateway_id},
-        {
-            "$setOnInsert": {
-                "gatewayId": gateway_id,
-                "apiKey": api_key,
-                "secret_key": api_key,
-                "createdAt": now,
-            },
-            "$set": {
-                "lastHandshake": now,
-                "certFingerprint": cert_fingerprint
-            },
-        },
-        upsert=True,
-    )
-
-    await db.trains.update_one(
-        {"trainNo": data.trainId},
-        {
-            "$set": {"trainNo": data.trainId, "status": "running", "updatedAt": now},
-            "$addToSet": {"gateways": gateway_id},
-            "$setOnInsert": {"trainName": "", "createdAt": now},
-        },
-        upsert=True,
-    )
-
-    await db.gateway_status.update_one(
-        {"gatewayId": gateway_id},
-        {
-            "$set": {
-                "gatewayId": gateway_id,
-                "trainId": data.trainId,
-                "online": True,
-                "lastHandshake": now,
-                "lastHeartbeat": now,
-            }
-        },
-        upsert=True,
-    )
-
-    return {
-        "status": "success",
-        "message": "Handshake successful and API key provisioned",
-        "gatewayId": gateway_id,
-        "apiKey": api_key,
-    }
+        return {
+            "status": "success",
+            "message": "Handshake successful and API key provisioned",
+            "gatewayId": gateway_id,
+            "apiKey": api_key,
+        }
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Handshake error: {exc}")
 
 
 @app.post("/api/v1/handshake/hello", response_model=HandshakeHelloResponse)
