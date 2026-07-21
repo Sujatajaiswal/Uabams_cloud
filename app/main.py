@@ -390,13 +390,30 @@ def verify_gateway_token(token: str, gateway_id: str) -> dict[str, Any]:
     return payload
 
 
+startup_error = None
+
+
 @app.on_event("startup")
 async def startup() -> None:
+    global startup_error
     if settings["database_type"] == "postgres":
         import asyncpg
+        pool = None
         try:
             pool = await asyncpg.create_pool(settings["database_url"])
-            db.pg_pool = pool
+        except Exception as ssl_exc:
+            try:
+                # Fallback to SSL required mode for managed databases on Neon/Supabase/Render
+                pool = await asyncpg.create_pool(settings["database_url"], ssl="require")
+            except Exception as final_exc:
+                startup_error = f"SSL-less error: {ssl_exc} | SSL-required error: {final_exc}"
+                print(f"Warning: Failed to connect to PostgreSQL: {startup_error}")
+                
+        db.pg_pool = pool
+        if pool is None:
+            return
+            
+        try:
             async with pool.acquire() as conn:
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS trains (
