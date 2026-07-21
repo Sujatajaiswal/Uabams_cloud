@@ -954,7 +954,8 @@ async def upload_archive(
     session_status = metadata.get("sessionStatus", "unknown")
     warnings = list(parsed.warnings)
 
-    if metadata.get("gatewayId") and metadata.get("gatewayId") != gateway_id:
+    meta_gateway_id = metadata.get("gatewayId") or metadata.get("gateway_id")
+    if meta_gateway_id and normalize_gateway_id(meta_gateway_id) != normalize_gateway_id(gateway_id):
         warnings.append("Metadata gatewayId does not match API key gateway")
     if metadata.get("trainId") and metadata.get("trainId") != train_id:
         warnings.append("Metadata trainId does not match resolved train")

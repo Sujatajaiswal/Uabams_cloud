@@ -353,15 +353,33 @@ def peak_records_to_alert_events(
 
 
 def _read_metadata(archive: zipfile.ZipFile, warnings: list[str]) -> dict[str, Any]:
-    member = _find_member(archive, "session_metadata.json")
+    metadata_candidates = [
+        "session_metadata.json",
+        "metadata.json",
+        "manifest.json",
+        "session.json",
+        "header.json"
+    ]
+    member = None
+    for cand in metadata_candidates:
+        member = _find_member(archive, cand)
+        if member:
+            break
+
     if not member:
-        warnings.append("Missing session_metadata.json")
+        warnings.append("Missing metadata JSON file (expected session_metadata.json, metadata.json, or manifest.json)")
         return {}
 
     try:
-        return json.loads(archive.read(member).decode("utf-8"))
+        data = json.loads(archive.read(member).decode("utf-8"))
+        if isinstance(data, dict):
+            if "createdUtc" in data and "createdAt" not in data:
+                data["createdAt"] = data["createdUtc"]
+            if "created_utc" in data and "createdAt" not in data:
+                data["createdAt"] = data["created_utc"]
+        return data
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        warnings.append(f"Invalid session_metadata.json: {exc}")
+        warnings.append(f"Invalid metadata JSON ({member}): {exc}")
         return {}
 
 
