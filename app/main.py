@@ -631,7 +631,14 @@ async def startup() -> None:
 
     await db.gateways.create_index("gatewayId", unique=True)
     await db.gateways.create_index("trainId")
-    await db.gateway_auth.create_index("gatewayId", unique=True)
+    if settings.get("database_type") == "mongodb":
+        try:
+            await db.gateway_auth.drop_index("gatewayId_1")
+        except Exception:
+            pass
+        await db.gateway_auth.create_index([("gatewayId", 1), ("trainId", 1)], unique=True)
+    else:
+        await db.gateway_auth.create_index("gatewayId", unique=True)
     await db.gateway_status.create_index("gatewayId", unique=True)
     await db.calibrations.create_index("gatewayId", unique=True)
     await db.calibration_versions.create_index([("gateway_id", 1), ("version", -1)])
