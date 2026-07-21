@@ -404,6 +404,185 @@ async def startup() -> None:
                         train_name VARCHAR(255) NOT NULL,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
+                    CREATE TABLE IF NOT EXISTS gateways (
+                        gateway_id VARCHAR(100) PRIMARY KEY,
+                        train_id VARCHAR(50),
+                        last_heartbeat TIMESTAMP WITH TIME ZONE,
+                        status VARCHAR(50),
+                        provision_status VARCHAR(20) DEFAULT 'active'
+                    );
+                    CREATE TABLE IF NOT EXISTS gateway_auth (
+                        gateway_id VARCHAR(100) PRIMARY KEY,
+                        secret_key VARCHAR(255) NOT NULL,
+                        cert_fingerprint VARCHAR(64),
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS gateway_status (
+                        gateway_id VARCHAR(100) PRIMARY KEY,
+                        adxl_state VARCHAR(50),
+                        adxl_uptime INTEGER,
+                        adxl_faults INTEGER,
+                        adxl_fw_version VARCHAR(50),
+                        adxl_cal_version INTEGER,
+                        encoder_state VARCHAR(50),
+                        encoder_uptime INTEGER,
+                        encoder_faults INTEGER,
+                        encoder_fw_version VARCHAR(50),
+                        encoder_cal_version INTEGER,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        train_id VARCHAR(50),
+                        online BOOLEAN DEFAULT FALSE,
+                        last_heartbeat TIMESTAMP WITH TIME ZONE,
+                        last_handshake TIMESTAMP WITH TIME ZONE
+                    );
+                    CREATE TABLE IF NOT EXISTS calibrations (
+                        gateway_id VARCHAR(100) PRIMARY KEY,
+                        scale_x DOUBLE PRECISION DEFAULT 1.0,
+                        scale_y DOUBLE PRECISION DEFAULT 1.0,
+                        scale_z DOUBLE PRECISION DEFAULT 1.0,
+                        offset_x DOUBLE PRECISION DEFAULT 0.0,
+                        offset_y DOUBLE PRECISION DEFAULT 0.0,
+                        offset_z DOUBLE PRECISION DEFAULT 0.0,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS calibration_versions (
+                        id SERIAL PRIMARY KEY,
+                        gateway_id VARCHAR(100),
+                        version INTEGER NOT NULL,
+                        scale_x DOUBLE PRECISION DEFAULT 1.0,
+                        scale_y DOUBLE PRECISION DEFAULT 1.0,
+                        scale_z DOUBLE PRECISION DEFAULT 1.0,
+                        offset_x DOUBLE PRECISION DEFAULT 0.0,
+                        offset_y DOUBLE PRECISION DEFAULT 0.0,
+                        offset_z DOUBLE PRECISION DEFAULT 0.0,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS alert_events (
+                        id SERIAL PRIMARY KEY,
+                        train_no VARCHAR(50),
+                        gateway_id VARCHAR(100),
+                        alert_type VARCHAR(20),
+                        latitude DOUBLE PRECISION,
+                        longitude DOUBLE PRECISION,
+                        position_mm INTEGER,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        session_name VARCHAR(100),
+                        archive_sha256 VARCHAR(64),
+                        source VARCHAR(50),
+                        peak_axis VARCHAR(10),
+                        peak_value_g DOUBLE PRECISION,
+                        speed_kmph DOUBLE PRECISION,
+                        alert VARCHAR(20),
+                        session_status VARCHAR(50) DEFAULT 'active',
+                        archived_at TIMESTAMP WITH TIME ZONE
+                    );
+                    CREATE TABLE IF NOT EXISTS archives (
+                        id SERIAL PRIMARY KEY,
+                        gateway_id VARCHAR(100),
+                        sha256 VARCHAR(64),
+                        received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        train_id VARCHAR(50),
+                        session_name VARCHAR(100),
+                        session_status VARCHAR(50),
+                        size_bytes BIGINT,
+                        status VARCHAR(50),
+                        parse_warnings TEXT
+                    );
+                    CREATE TABLE IF NOT EXISTS rms_records (
+                        id SERIAL PRIMARY KEY,
+                        train_id VARCHAR(50),
+                        gateway_id VARCHAR(100),
+                        session_name VARCHAR(100),
+                        archive_sha256 VARCHAR(64),
+                        latitude DOUBLE PRECISION,
+                        longitude DOUBLE PRECISION,
+                        gps_valid BOOLEAN,
+                        bearing DOUBLE PRECISION,
+                        speed DOUBLE PRECISION,
+                        position_mm INTEGER,
+                        axes JSONB,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS peak_records (
+                        id SERIAL PRIMARY KEY,
+                        train_id VARCHAR(50),
+                        gateway_id VARCHAR(100),
+                        archive_sha256 VARCHAR(64),
+                        window_start_mm INTEGER,
+                        position_mm INTEGER,
+                        speed_kmph DOUBLE PRECISION,
+                        latitude DOUBLE PRECISION,
+                        longitude DOUBLE PRECISION,
+                        axes JSONB,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS fault_records (
+                        id SERIAL PRIMARY KEY,
+                        train_id VARCHAR(50),
+                        gateway_id VARCHAR(100),
+                        archive_sha256 VARCHAR(64),
+                        timestamp_ms BIGINT,
+                        fault_code INTEGER,
+                        description TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS sessions (
+                        id SERIAL PRIMARY KEY,
+                        train_no VARCHAR(50),
+                        session_name VARCHAR(100),
+                        status VARCHAR(50),
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS reset_events (
+                        id SERIAL PRIMARY KEY,
+                        train_no VARCHAR(50),
+                        reason TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS activity_logs (
+                        id SERIAL PRIMARY KEY,
+                        username VARCHAR(100),
+                        page VARCHAR(100),
+                        action VARCHAR(100),
+                        error_message TEXT,
+                        ip_address VARCHAR(50),
+                        latitude DOUBLE PRECISION,
+                        longitude DOUBLE PRECISION,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS handshake_sessions (
+                        session_id VARCHAR(100) PRIMARY KEY,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS time_domain_files (
+                        id SERIAL PRIMARY KEY,
+                        file_id VARCHAR(100),
+                        gateway_id VARCHAR(100),
+                        train_id VARCHAR(50),
+                        session_name VARCHAR(100),
+                        archive_sha256 VARCHAR(64),
+                        filename VARCHAR(255),
+                        path VARCHAR(255),
+                        size_bytes BIGINT,
+                        sha256 VARCHAR(64),
+                        chunk_count INTEGER,
+                        total_size BIGINT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP WITH TIME ZONE
+                    );
+                    CREATE TABLE IF NOT EXISTS time_domain_chunks (
+                        id SERIAL PRIMARY KEY,
+                        file_id VARCHAR(100),
+                        gateway_id VARCHAR(100),
+                        train_id VARCHAR(50),
+                        archive_sha256 VARCHAR(64),
+                        chunk_index INTEGER,
+                        chunk_data BYTEA,
+                        data BYTEA,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP WITH TIME ZONE
+                    );
+
                     ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS session_name VARCHAR(100);
                     ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS archive_sha256 VARCHAR(64);
                     ALTER TABLE alert_events ADD COLUMN IF NOT EXISTS source VARCHAR(50);
@@ -1004,14 +1183,18 @@ async def upload_archive(
     if peak_alerts:
         await db.alert_events.insert_many(peak_alerts)
 
-    stored_raw_files = await store_time_domain_files(
-        parsed.raw_files,
-        gateway_id,
-        train_id,
-        session_name,
-        actual_sha256,
-        now,
-    )
+    try:
+        stored_raw_files = await store_time_domain_files(
+            parsed.raw_files,
+            gateway_id,
+            train_id,
+            session_name,
+            actual_sha256,
+            now,
+        )
+    except Exception as exc:
+        print(f"Warning: Raw time domain storage exception: {exc}")
+        stored_raw_files = []
 
     document = {
         "gatewayId": gateway_id,
@@ -1037,15 +1220,21 @@ async def upload_archive(
         "status": "processed_with_warnings" if warnings else "processed",
     }
 
-    existing = await db.archives.find_one({"gatewayId": gateway_id, "sha256": actual_sha256})
-    if existing:
-        await db.archives.update_one({"_id": existing["_id"]}, {"$set": document})
-        document["_id"] = existing["_id"]
-    else:
-        result = await db.archives.insert_one(document)
-        document["_id"] = result.inserted_id
+    try:
+        existing = await db.archives.find_one({"gatewayId": gateway_id, "sha256": actual_sha256})
+        if existing:
+            await db.archives.update_one({"_id": existing["_id"]}, {"$set": document})
+            document["_id"] = existing["_id"]
+        else:
+            result = await db.archives.insert_one(document)
+            document["_id"] = result.inserted_id
+    except Exception as exc:
+        print(f"Warning: db.archives insert/update exception: {exc}")
 
-    await mark_gateway_online(gateway_id, train_id, now)
+    try:
+        await mark_gateway_online(gateway_id, train_id, now)
+    except Exception as exc:
+        print(f"Warning: mark_gateway_online exception: {exc}")
 
     return {
         "status": "success",
