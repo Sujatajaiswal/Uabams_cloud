@@ -422,6 +422,8 @@ async def startup() -> None:
                     ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
                     ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
                     ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+                    ALTER TABLE gateway_auth ADD COLUMN IF NOT EXISTS cert_fingerprint VARCHAR(64);
+                    ALTER TABLE gateways ADD COLUMN IF NOT EXISTS provision_status VARCHAR(20) DEFAULT 'active';
                 """)
         except Exception as exc:
             print(f"Warning: Failed to connect to PostgreSQL: {exc}")
@@ -591,15 +593,32 @@ async def list_activity_logs(request: Request, username: str | None = None, page
 
 
 @app.post("/api/v1/handshake")
-async def handshake(data: HandshakeRequest):
+async def handshake(data: HandshakeRequest, request: Request):
     now = utc_now()
-    api_key = token_hex(16)
+    cert_pem = request.headers.get("X-Client-Cert") or data.clientCertPem
+    cert_fingerprint = None
+    cert_gateway_id = None
+
+    if cert_pem:
+        try:
+            cert_bytes = cert_pem.encode("utf-8")
+            cert_fingerprint = sha256(cert_bytes).hexdigest()
+            from cryptography import x509
+            from cryptography.hazmat.backends import default_backend
+            cert = x509.load_pem_x509_certificate(cert_bytes, default_backend())
+            cn_attributes = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+            if cn_attributes:
+                cert_gateway_id = cn_attributes[0].value
+        except Exception as exc:
+            print(f"Handshake certificate parsing warning: {exc}")
+
+    gateway_id = cert_gateway_id or data.gatewayId
 
     await db.gateways.update_one(
-        {"gatewayId": data.gatewayId},
+        {"gatewayId": gateway_id},
         {
             "$set": {
-                "gatewayId": data.gatewayId,
+                "gatewayId": gateway_id,
                 "trainId": data.trainId,
                 "gatewaySerial": data.gatewaySerial,
                 "firmwareVersion": data.firmwareVersion,
@@ -612,20 +631,25 @@ async def handshake(data: HandshakeRequest):
         upsert=True,
     )
 
-    auth_doc = await db.gateway_auth.find_one({"gatewayId": data.gatewayId})
-    is_new_gateway = auth_doc is None
+    auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id})
     if auth_doc:
-        api_key = auth_doc["apiKey"]
+        api_key = auth_doc.get("apiKey") or auth_doc.get("secret_key")
+    else:
+        api_key = token_hex(32)
 
     await db.gateway_auth.update_one(
-        {"gatewayId": data.gatewayId},
+        {"gatewayId": gateway_id},
         {
             "$setOnInsert": {
-                "gatewayId": data.gatewayId,
+                "gatewayId": gateway_id,
                 "apiKey": api_key,
+                "secret_key": api_key,
                 "createdAt": now,
             },
-            "$set": {"lastHandshake": now},
+            "$set": {
+                "lastHandshake": now,
+                "certFingerprint": cert_fingerprint
+            },
         },
         upsert=True,
     )
@@ -634,17 +658,17 @@ async def handshake(data: HandshakeRequest):
         {"trainNo": data.trainId},
         {
             "$set": {"trainNo": data.trainId, "status": "running", "updatedAt": now},
-            "$addToSet": {"gateways": data.gatewayId},
+            "$addToSet": {"gateways": gateway_id},
             "$setOnInsert": {"trainName": "", "createdAt": now},
         },
         upsert=True,
     )
 
     await db.gateway_status.update_one(
-        {"gatewayId": data.gatewayId},
+        {"gatewayId": gateway_id},
         {
             "$set": {
-                "gatewayId": data.gatewayId,
+                "gatewayId": gateway_id,
                 "trainId": data.trainId,
                 "online": True,
                 "lastHandshake": now,
@@ -656,10 +680,9 @@ async def handshake(data: HandshakeRequest):
 
     return {
         "status": "success",
-        "message": "Gateway registered",
-        "gatewayId": data.gatewayId,
+        "message": "Handshake successful and API key provisioned",
+        "gatewayId": gateway_id,
         "apiKey": api_key,
-        "isNewGateway": is_new_gateway,
     }
 
 

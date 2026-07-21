@@ -9,6 +9,7 @@ class HandshakeRequest(BaseModel):
     trainId: str = Field(..., examples=["12345"])
     gatewaySerial: str = Field(..., examples=["SN001"])
     firmwareVersion: str = Field(..., examples=["1.0"])
+    clientCertPem: str | None = Field(default=None, description="Optional PEM encoded X.509 client certificate for PKI auto-provisioning")
 
 
 class AuthRequest(BaseModel):
