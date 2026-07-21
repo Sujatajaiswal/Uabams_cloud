@@ -786,7 +786,7 @@ async def handshake(data: HandshakeRequest, request: Request):
 
         if cert_pem:
             try:
-                cert_bytes = cert_pem.encode("utf-8")
+                cert_bytes = cert_pem.replace("\\n", "\n").encode("utf-8")
                 cert_fingerprint = sha256(cert_bytes).hexdigest()
                 from cryptography import x509
                 from cryptography.hazmat.backends import default_backend
@@ -795,7 +795,7 @@ async def handshake(data: HandshakeRequest, request: Request):
                 if cn_attributes:
                     cert_gateway_id = cn_attributes[0].value
             except Exception as exc:
-                print(f"Handshake certificate parsing warning: {exc}")
+                raise HTTPException(status_code=403, detail=f"Invalid or untrusted device certificate: {exc}")
 
         gateway_id = cert_gateway_id or data.gatewayId
 
