@@ -14,7 +14,9 @@ class HandshakeRequest(BaseModel):
 
 class AuthRequest(BaseModel):
     gatewayId: str = Field(..., examples=["GW1"])
+    trainId: str = Field(..., examples=["019456"])
     apiKey: str = Field(..., examples=["123456"])
+    sessionId: str = Field(..., examples=["sessionId"])
 
 
 class HeartbeatRequest(BaseModel):

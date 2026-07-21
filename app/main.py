@@ -412,10 +412,13 @@ async def startup() -> None:
                         provision_status VARCHAR(20) DEFAULT 'active'
                     );
                     CREATE TABLE IF NOT EXISTS gateway_auth (
-                        gateway_id VARCHAR(100) PRIMARY KEY,
+                        gateway_id VARCHAR(100),
+                        train_id VARCHAR(50),
                         secret_key VARCHAR(255) NOT NULL,
                         cert_fingerprint VARCHAR(64),
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        last_authenticated TIMESTAMP WITH TIME ZONE,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (gateway_id, train_id)
                     );
                     CREATE TABLE IF NOT EXISTS gateway_status (
                         gateway_id VARCHAR(100) PRIMARY KEY,
@@ -600,8 +603,13 @@ async def startup() -> None:
                     ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS position_mm INTEGER;
                     ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS speed_kmph DOUBLE PRECISION;
                     ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
-                    ALTER TABLE peak_records ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
                     ALTER TABLE gateway_auth ADD COLUMN IF NOT EXISTS cert_fingerprint VARCHAR(64);
+                    ALTER TABLE gateway_auth ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
+                    ALTER TABLE gateway_auth ADD COLUMN IF NOT EXISTS last_authenticated TIMESTAMP WITH TIME ZONE;
+                    UPDATE gateway_auth SET train_id = '019456' WHERE train_id IS NULL;
+                    ALTER TABLE gateway_auth DROP CONSTRAINT IF EXISTS gateway_auth_pkey;
+                    ALTER TABLE gateway_auth ADD CONSTRAINT gateway_auth_pkey PRIMARY KEY (gateway_id, train_id);
+
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS provision_status VARCHAR(20) DEFAULT 'active';
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS gateway_serial VARCHAR(100);
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS firmware_version VARCHAR(50);
@@ -609,6 +617,8 @@ async def startup() -> None:
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;
                     ALTER TABLE gateways ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
                     ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS gateway_id VARCHAR(100);
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS train_id VARCHAR(50);
+                    ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS authenticated BOOLEAN DEFAULT FALSE;
                     ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS server_private_key_hex TEXT;
                     ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS client_public_key_hex TEXT;
                     ALTER TABLE handshake_sessions ADD COLUMN IF NOT EXISTS nonce VARCHAR(64);
@@ -924,6 +934,7 @@ async def handshake_hello(data: HandshakeHelloRequest):
         "clientPublicKeyHex": data.clientPublicKey,
         "nonce": nonce,
         "verified": False,
+        "authenticated": False,
         "createdAt": utc_now(),
     })
 
@@ -939,6 +950,9 @@ async def handshake_verify(data: HandshakeVerifyRequest):
     session = await db.handshake_sessions.find_one({"sessionId": data.sessionId})
     if not session:
         raise HTTPException(status_code=404, detail="Handshake session not found or expired")
+
+    if not session.get("authenticated"):
+        raise HTTPException(status_code=403, detail="Session not authenticated. Run /api/v1/authenticate first.")
 
     try:
         # 1. Load keys
@@ -999,24 +1013,47 @@ async def handshake_verify(data: HandshakeVerifyRequest):
 @app.post("/api/v1/authenticate")
 async def authenticate(data: AuthRequest):
     gateway_id = normalize_gateway_id(data.gatewayId) or data.gatewayId
-    auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id}) or await db.gateway_auth.find_one({"secret_key": data.apiKey})
+    train_id = data.trainId
 
+    # 1. Verify session exists
+    session = await db.handshake_sessions.find_one({"sessionId": data.sessionId})
+    if not session:
+        raise HTTPException(status_code=404, detail="Handshake session not found or expired")
+
+    # 2. Look up compound gateway_auth by both gatewayId and trainId
+    auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id, "trainId": train_id})
     if not auth_doc:
-        return {"status": "failed", "message": "Gateway not found"}
+        return {"status": "failed", "message": f"Gateway {gateway_id} on Train {train_id} not registered"}
 
     stored_key = auth_doc.get("apiKey") or auth_doc.get("secret_key")
+    print(f"DEBUG AUTH: auth_doc={repr(auth_doc)}, stored_key={repr(stored_key)}, request_key={repr(data.apiKey)}", flush=True)
     if stored_key != data.apiKey:
         return {"status": "failed", "message": "Invalid API Key"}
 
-    gateway = await db.gateways.find_one({"gatewayId": gateway_id})
-    token = create_gateway_token(gateway_id, gateway.get("trainId") if gateway else None)
+    # 3. Generate token and update session to authenticated
+    token = create_gateway_token(gateway_id, train_id)
+    
+    await db.handshake_sessions.update_one(
+        {"sessionId": data.sessionId},
+        {"$set": {
+            "authenticated": True,
+            "trainId": train_id,
+            "gatewayId": gateway_id
+        }}
+    )
 
     await db.gateway_auth.update_one(
-        {"gatewayId": gateway_id},
+        {"gatewayId": gateway_id, "trainId": train_id},
         {"$set": {"lastAuthenticated": utc_now()}},
     )
 
-    return {"status": "authenticated", "token": token, "gatewayId": gateway_id}
+    return {
+        "status": "authenticated",
+        "token": token,
+        "gatewayId": gateway_id,
+        "trainId": train_id,
+        "sessionId": data.sessionId
+    }
 
 
 @app.post("/api/v1/gateway/demo-connect", response_model=GatewayConnectionResponse)

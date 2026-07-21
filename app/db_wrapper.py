@@ -62,13 +62,15 @@ FIELD_MAP = {
     "clientPublicKeyHex": "client_public_key_hex",
     "sessionKeyHex": "session_key_hex",
     "verifiedAt": "verified_at",
+    "authenticated": "authenticated",
+    "lastAuthenticated": "last_authenticated",
 }
 
 REV_MAP = {v: k for k, v in FIELD_MAP.items()}
 
 TABLE_COLUMNS = {
     "gateways": ["gateway_id", "train_id", "gateway_serial", "firmware_version", "status", "provision_status", "last_seen", "updated_at", "created_at"],
-    "gateway_auth": ["gateway_id", "secret_key", "created_at"],
+    "gateway_auth": ["gateway_id", "train_id", "secret_key", "last_authenticated", "created_at"],
     "gateway_status": [
         "gateway_id", "adxl_state", "adxl_uptime", "adxl_faults", "adxl_fw_version", "adxl_cal_version",
         "encoder_state", "encoder_uptime", "encoder_faults", "encoder_fw_version", "encoder_cal_version", "updated_at",
@@ -98,8 +100,8 @@ TABLE_COLUMNS = {
     "reset_events": ["train_no", "reason", "created_at"],
     "activity_logs": ["username", "page", "action", "error_message", "ip_address", "latitude", "longitude", "created_at"],
     "handshake_sessions": [
-        "session_id", "gateway_id", "server_private_key_hex", "client_public_key_hex",
-        "nonce", "verified", "session_key_hex", "verified_at", "created_at"
+        "session_id", "gateway_id", "train_id", "server_private_key_hex", "client_public_key_hex",
+        "nonce", "verified", "authenticated", "session_key_hex", "verified_at", "created_at"
     ],
     "time_domain_files": ["filename", "sha256", "total_size", "created_at"],
     "time_domain_chunks": ["file_id", "chunk_index", "chunk_data", "created_at"],
@@ -399,6 +401,9 @@ class CollectionWrapper:
                     v = json.dumps(v)
                 set_fields[pg_col] = v
                 
+        if not set_fields:
+            return
+            
         if upsert:
             pk_col = "id"
             if self.table_name in ["gateways", "gateway_auth", "gateway_status", "calibrations"]:
@@ -471,7 +476,7 @@ class CollectionWrapper:
             where_str = " AND ".join(where_clauses) if where_clauses else "TRUE"
             combined_sql = f"UPDATE {self.table_name} SET {', '.join(set_clauses)} WHERE {where_str}"
             final_sql, final_args = replace_named_params(combined_sql, sql_params)
-            
+            print(f"DEBUG SQL: final_sql={repr(final_sql)}, final_args={repr(final_args)}", flush=True)
             async with self.pg_pool.acquire() as conn:
                 await conn.execute(final_sql, *final_args)
 
