@@ -709,6 +709,14 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    global startup_error
+    if db.db_type == "postgres" and db.pg_pool is None:
+        return {
+            "status": "unhealthy",
+            "database_type": "postgres",
+            "connection": "failed",
+            "startup_error": startup_error
+        }
     try:
         # Perform a test query on gateway_auth collection/table
         await db.gateway_auth.find_one({"gatewayId": "health_check_test_id"})
@@ -722,7 +730,8 @@ async def health_check():
             "status": "unhealthy",
             "database_type": db.db_type,
             "connection": "failed",
-            "error": str(exc)
+            "error": str(exc),
+            "startup_error": startup_error
         }
 
 
