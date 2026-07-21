@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import db, settings
-from app.middleware.auth import GatewayAuthMiddleware
+from app.middleware.auth import GatewayAuthMiddleware, normalize_gateway_id
 from app.models import (
     AlertRequest,
     AuthRequest,
