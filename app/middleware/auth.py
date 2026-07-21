@@ -48,7 +48,9 @@ async def async_gateway_id_for_key(api_key: str | None) -> str | None:
     # 2. Check database table (gateway_auth)
     try:
         from app.database import db
-        auth_doc = await db.gateway_auth.find_one({"$or": [{"apiKey": api_key_clean}, {"secret_key": api_key_clean}]})
+        auth_doc = await db.gateway_auth.find_one({"secret_key": api_key_clean})
+        if not auth_doc:
+            auth_doc = await db.gateway_auth.find_one({"apiKey": api_key_clean})
         if auth_doc:
             raw_id = auth_doc.get("gatewayId") or auth_doc.get("gateway_id")
             return normalize_gateway_id(raw_id)

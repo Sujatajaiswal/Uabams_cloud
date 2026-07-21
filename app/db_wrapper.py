@@ -97,11 +97,28 @@ TABLE_COLUMNS = {
 
 
 def translate_filter(table_name, mongo_filter):
+    if not mongo_filter:
+        return "TRUE", {}
+        
     where_clauses = []
     params = {}
     param_idx = 1
     
     for key, value in mongo_filter.items():
+        if key == "$or" and isinstance(value, list):
+            or_clauses = []
+            for sub_filter in value:
+                sub_where, sub_params = translate_filter(table_name, sub_filter)
+                for p_name, p_val in sub_params.items():
+                    new_p_name = f"p_{param_idx}"
+                    param_idx += 1
+                    sub_where = sub_where.replace(f"${p_name}", f"${new_p_name}")
+                    params[new_p_name] = p_val
+                or_clauses.append(f"({sub_where})")
+            if or_clauses:
+                where_clauses.append(f"({' OR '.join(or_clauses)})")
+            continue
+
         pg_col = FIELD_MAP.get(key, key)
         if key == "_id":
             pg_col = "id"
