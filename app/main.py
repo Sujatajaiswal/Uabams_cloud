@@ -1378,6 +1378,7 @@ async def upload_archive(
 @app.post("/api/v1/alert")
 async def create_alert(
     request: Request,
+    payload: Annotated[AlertRequest | None, Body(description="JSON Alert Payload (for testing or unencrypted alerts)")] = None,
     x_api_key: Annotated[str | None, Header(alias="X-Api-Key")] = None,
     x_session_id: Annotated[str | None, Header(alias="X-Session-Id")] = None,
     x_session_iv: Annotated[str | None, Header(alias="X-Session-Iv")] = None,
