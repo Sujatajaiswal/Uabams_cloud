@@ -698,13 +698,13 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
 
     alertPoints.forEach((point, index) => {
       const severity = normalizeAlert(point.color);
-      if (severity !== 'RED') return;
+      if (severity !== 'RED' && severity !== 'YELLOW') return;
       const markerPoint = jitterPoint(point.lat, point.lon, index);
       L.circleMarker(markerPoint, {
         radius: 8,
         color: '#ffffff',
         weight: 2.5,
-        fillColor: '#c24134',
+        fillColor: severity === 'RED' ? '#c24134' : '#f59e0b',
         fillOpacity: 1,
       })
         .addTo(layer)
