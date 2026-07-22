@@ -1583,10 +1583,31 @@ async def train_dashboard(train_no: str, request: Request):
     gateway_ids = list(dict.fromkeys([*expected_gateways, *train.get("gateways", [])]))
     statuses = await db.gateway_status.find({"gatewayId": {"$in": gateway_ids}}).to_list(length=20)
     status_by_id = {item.get("gatewayId"): item for item in statuses}
+    now_dt = utc_now()
     gateway_cards = []
     for gateway_id in gateway_ids:
         card = status_by_id.get(gateway_id)
         if card:
+            lh = card.get("lastHeartbeat") or card.get("last_heartbeat")
+            if lh:
+                lh_dt = lh
+                if isinstance(lh, str):
+                    try:
+                        from dateutil.parser import parse
+                        lh_dt = parse(lh)
+                    except Exception:
+                        lh_dt = None
+                if lh_dt:
+                    if lh_dt.tzinfo is None:
+                        lh_dt = lh_dt.replace(tzinfo=timezone.utc)
+                    if (now_dt - lh_dt).total_seconds() > 3600:
+                        card["online"] = False
+                    else:
+                        card["online"] = True
+                else:
+                    card["online"] = False
+            else:
+                card["online"] = False
             gateway_cards.append(card)
         else:
             gateway_cards.append({
@@ -1621,6 +1642,27 @@ async def train_dashboard(train_no: str, request: Request):
 @app.get("/api/v1/trains/{train_no}/gateways/{gateway_id}/details")
 async def gateway_details(train_no: str, gateway_id: str):
     gateway = await db.gateway_status.find_one({"gatewayId": gateway_id})
+    if gateway:
+        lh = gateway.get("lastHeartbeat") or gateway.get("last_heartbeat")
+        if lh:
+            lh_dt = lh
+            if isinstance(lh, str):
+                try:
+                    from dateutil.parser import parse
+                    lh_dt = parse(lh)
+                except Exception:
+                    lh_dt = None
+            if lh_dt:
+                if lh_dt.tzinfo is None:
+                    lh_dt = lh_dt.replace(tzinfo=timezone.utc)
+                if (utc_now() - lh_dt).total_seconds() > 3600:
+                    gateway["online"] = False
+                else:
+                    gateway["online"] = True
+            else:
+                gateway["online"] = False
+        else:
+            gateway["online"] = False
     archive_count = await db.archives.count_documents({"trainId": train_no, "gatewayId": gateway_id})
     alert_count = await db.alert_events.count_documents({"trainNo": train_no, "gatewayId": gateway_id, "sessionStatus": {"$ne": "archived"}})
     critical_count = await db.alert_events.count_documents({"trainNo": train_no, "gatewayId": gateway_id, "alert": "RED", "sessionStatus": {"$ne": "archived"}})
