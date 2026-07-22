@@ -1814,7 +1814,7 @@ async def map_rms(train_id: str, gateway_id: str | None = None):
             "createdAt": 1,
             "archiveSha256": 1,
         },
-    ).sort([("createdAt", -1), ("gatewayId", 1), ("positionMm", -1)]).limit(5000).to_list(length=5000)
+    ).sort([("createdAt", -1), ("gatewayId", 1), ("positionMm", -1)]).limit(10000).to_list(length=10000)
 
     records_by_gateway: dict[str, list[dict[str, Any]]] = {}
     for item in recent_records:
