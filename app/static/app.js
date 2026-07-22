@@ -399,6 +399,27 @@ function jitterPoint(lat, lon, index) {
   return [Number(lat) + offset * Math.sin(angle), Number(lon) + offset * Math.cos(angle)];
 }
 
+function snapToRoute(lat, lon, routePoints) {
+  if (!routePoints || routePoints.length === 0) {
+    return [Number(lat), Number(lon)];
+  }
+  let closestPoint = routePoints[0];
+  let minDistance = Infinity;
+  const targetLat = Number(lat);
+  const targetLon = Number(lon);
+  
+  for (const pt of routePoints) {
+    const ptLat = Number(pt.lat);
+    const ptLon = Number(pt.lon);
+    const dist = Math.pow(ptLat - targetLat, 2) + Math.pow(ptLon - targetLon, 2);
+    if (dist < minDistance) {
+      minDistance = dist;
+      closestPoint = pt;
+    }
+  }
+  return [Number(closestPoint.lat), Number(closestPoint.lon)];
+}
+
 function routePopup(point) {
   const positionKm = Number.isFinite(Number(point.position_mm)) ? `${(Number(point.position_mm) / 1000).toFixed(2)} km` : '-';
   return `
@@ -697,7 +718,8 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
     alertPoints.forEach((point, index) => {
       const severity = normalizeAlert(point.color);
       if (severity !== 'RED' && severity !== 'YELLOW') return;
-      const markerPoint = jitterPoint(point.lat, point.lon, index);
+      const snapped = snapToRoute(point.lat, point.lon, routePoints);
+      const markerPoint = jitterPoint(snapped[0], snapped[1], index);
       L.circleMarker(markerPoint, {
         radius: 8,
         color: '#ffffff',
@@ -712,7 +734,10 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
     const redAlertPoints = alertPoints.filter(point => normalizeAlert(point.color) === 'RED');
     const bounds = L.latLngBounds([
       ...routePoints.map((point) => [Number(point.lat), Number(point.lon)]),
-      ...redAlertPoints.map((point, index) => jitterPoint(point.lat, point.lon, index)),
+      ...redAlertPoints.map((point, index) => {
+        const snapped = snapToRoute(point.lat, point.lon, routePoints);
+        return jitterPoint(snapped[0], snapped[1], index);
+      }),
     ]);
     if (bounds.isValid()) {
       map.fitBounds(bounds.pad(selectedGateway ? 0.3 : 0.2), { maxZoom: 16 });
@@ -735,9 +760,13 @@ async function renderGatewayTrainPosition(trainNo, gatewayId) {
     const point = data.position;
     if (!point || !data.gatewayId || !maps[data.gatewayId]) return;
     const map = maps[data.gatewayId];
+    
+    const routePoints = (state.rmsPoints || []).filter(pt => pt.gateway_id === data.gatewayId);
+    const snapped = snapToRoute(point.latitude, point.longitude, routePoints);
+    
     const oldMarker = trainMarkers[data.gatewayId];
     if (oldMarker) oldMarker.remove();
-    trainMarkers[data.gatewayId] = L.marker([point.latitude, point.longitude], {
+    trainMarkers[data.gatewayId] = L.marker(snapped, {
       icon: L.divIcon({
         className: '',
         html: trainIconHtml(point.bearing),
