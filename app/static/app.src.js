@@ -393,7 +393,10 @@ function dashboardAlertToMapPoint(alert) {
 }
 
 function jitterPoint(lat, lon, index) {
-  return [Number(lat), Number(lon)];
+  if (!index) return [Number(lat), Number(lon)];
+  const angle = (index * 2 * Math.PI) / 8;
+  const offset = 0.00015 * index;
+  return [Number(lat) + offset * Math.sin(angle), Number(lon) + offset * Math.cos(angle)];
 }
 
 function routePopup(point) {
@@ -543,7 +546,7 @@ function renderDashboard(data) {
 
 function getItemDateStr(item) {
   if (!item) return null;
-  const rawDate = item.createdAt || item.receivedAt;
+  const rawDate = item.createdAt || item.created_at || item.receivedAt || item.received_at;
   if (!rawDate) return null;
   try {
     const parts = String(rawDate).split('T');
