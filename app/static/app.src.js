@@ -680,9 +680,7 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
       .filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)))
       .slice()
       .reverse();
-    const alertPoints = routePoints.length > 1
-      ? rawAlertPoints.filter((point) => pointInRouteBounds(point, routePoints))
-      : rawAlertPoints;
+    const alertPoints = rawAlertPoints.filter((point) => Number(point.lat) !== 0 && Number(point.lon) !== 0);
 
     const stateId = gatewayId === 'GW_UABAMS_BOGIE_02' ? 'gw2MapState' : 'gw1MapState';
     const gw = gateways.find((item) => item.gatewayId === gatewayId);
