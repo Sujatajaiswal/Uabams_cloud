@@ -121,6 +121,28 @@ function renderRecentTrainNumbers() {
 
   if (!list || !input) return;
 
+  if (!input.dataset.hasDatalistFix) {
+    input.dataset.hasDatalistFix = 'true';
+    let tempVal = '';
+    
+    const onFocus = function() {
+      tempVal = this.value;
+      this.value = '';
+    };
+    
+    const onBlur = function() {
+      setTimeout(() => {
+        if (this.value === '') {
+          this.value = tempVal;
+        }
+      }, 200);
+    };
+    
+    input.addEventListener('focus', onFocus);
+    input.addEventListener('click', onFocus);
+    input.addEventListener('blur', onBlur);
+  }
+
   const localTrainNos = recentTrainNumbers();
   
   const renderList = (trainObjects) => {
