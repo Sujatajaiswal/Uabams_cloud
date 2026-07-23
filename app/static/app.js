@@ -351,30 +351,36 @@ function renderGatewayCards(gatewayIdsToShow, gateways = [], train = {}, alerts 
 
 function initializeMaps() {
   if (!window.L) {
-    gatewayIds.forEach((id) => {
-      const target = id === 'GW_UABAMS_BOGIE_02' ? 'mapGw2' : 'mapGw1';
+    ['mapGw1', 'mapGw2'].forEach((target) => {
       setHtml(target, '<div class="empty-state">Leaflet map failed to load</div>');
     });
     return;
   }
 
   [
-    { gatewayId: 'GW_UABAMS_BOGIE_01', target: 'mapGw1' },
-    { gatewayId: 'GW_UABAMS_BOGIE_02', target: 'mapGw2' },
-  ].forEach(({ gatewayId, target }) => {
+    { slotIndex: 0, target: 'mapGw1' },
+    { slotIndex: 1, target: 'mapGw2' },
+  ].forEach(({ slotIndex, target }) => {
     if (!$(target)) return;
-    maps[gatewayId] = L.map(target, { zoomControl: true }).setView([22.9734, 78.6569], 5);
+    if (maps[slotIndex]) {
+      maps[slotIndex].remove();
+    }
+    maps[slotIndex] = L.map(target, { zoomControl: true }).setView([22.9734, 78.6569], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
-    }).addTo(maps[gatewayId]);
-    layers[gatewayId] = L.layerGroup().addTo(maps[gatewayId]);
+    }).addTo(maps[slotIndex]);
+    layers[slotIndex] = L.layerGroup().addTo(maps[slotIndex]);
   });
 }
 
 function refreshVisibleMaps(delay = 120) {
   setTimeout(() => {
-    visibleGatewayIds().forEach((gatewayId) => maps[gatewayId]?.invalidateSize());
+    dashboardGatewayIds.forEach((gatewayId, index) => {
+      if (visibleGatewayIds().includes(gatewayId)) {
+        maps[index]?.invalidateSize();
+      }
+    });
   }, delay);
 }
 
@@ -684,12 +690,30 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
   const validRmsPoints = rmsPoints
     .filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)));
 
-  gatewayIds.forEach((gatewayId) => {
-    const card = document.querySelector(`[data-map-gateway="${gatewayId}"]`);
-    if (card) card.classList.toggle('hidden', !visibleIds.includes(gatewayId));
+  const slots = [
+    { target: 'mapGw1', defaultId: 'GW_UABAMS_BOGIE_01', stateId: 'gw1MapState' },
+    { target: 'mapGw2', defaultId: 'GW_UABAMS_BOGIE_02', stateId: 'gw2MapState' },
+  ];
 
-    const map = maps[gatewayId];
-    const layer = layers[gatewayId];
+  slots.forEach((slot, index) => {
+    const card = document.querySelector(`[data-map-gateway="${slot.defaultId}"]`);
+    const gatewayId = dashboardGatewayIds[index];
+
+    if (!gatewayId) {
+      if (card) card.classList.add('hidden');
+      return;
+    }
+
+    if (card) {
+      card.classList.toggle('hidden', !visibleIds.includes(gatewayId));
+      const titleSpan = card.querySelector('.gateway-title span:first-child');
+      if (titleSpan) {
+        titleSpan.textContent = `${gatewayLabel(gatewayId)} Route Map`;
+      }
+    }
+
+    const map = maps[index];
+    const layer = layers[index];
     if (!map || !layer || !window.L) return;
     layer.clearLayers();
     if (!visibleIds.includes(gatewayId)) return;
@@ -703,10 +727,9 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
       .reverse();
     const alertPoints = rawAlertPoints.filter((point) => Number(point.lat) !== 0 && Number(point.lon) !== 0);
 
-    const stateId = gatewayId === 'GW_UABAMS_BOGIE_02' ? 'gw2MapState' : 'gw1MapState';
     const gw = gateways.find((item) => item.gatewayId === gatewayId);
-    setText(stateId, gw?.online ? 'Online' : 'Offline');
-    setClass(stateId, `badge ${gw?.online ? 'online' : 'offline'}`);
+    setText(slot.stateId, gw?.online ? 'Online' : 'Offline');
+    setClass(slot.stateId, `badge ${gw?.online ? 'online' : 'offline'}`);
 
     if (!routePoints.length && !alertPoints.length) {
       map.setView([22.9734, 78.6569], 5);
@@ -743,13 +766,15 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
       map.fitBounds(bounds.pad(selectedGateway ? 0.3 : 0.2), { maxZoom: 16 });
     }
   });
+
   refreshVisibleMaps();
 }
 function clearHiddenTrainMarkers(visibleIds) {
-  Object.entries(trainMarkers).forEach(([gatewayId, marker]) => {
-    if (!visibleIds.includes(gatewayId)) {
+  Object.entries(trainMarkers).forEach(([slotIndex, marker]) => {
+    const gatewayId = dashboardGatewayIds[Number(slotIndex)];
+    if (!gatewayId || !visibleIds.includes(gatewayId)) {
       marker.remove();
-      delete trainMarkers[gatewayId];
+      delete trainMarkers[slotIndex];
     }
   });
 }
@@ -758,15 +783,16 @@ async function renderGatewayTrainPosition(trainNo, gatewayId) {
   try {
     const data = await requestJson(`/api/v1/trains/${encodeURIComponent(trainNo)}/position?gateway_id=${encodeURIComponent(gatewayId)}`);
     const point = data.position;
-    if (!point || !data.gatewayId || !maps[data.gatewayId]) return;
-    const map = maps[data.gatewayId];
+    const slotIndex = dashboardGatewayIds.indexOf(data.gatewayId);
+    if (!point || slotIndex < 0 || !maps[slotIndex]) return;
+    const map = maps[slotIndex];
     
     const routePoints = (state.rmsPoints || []).filter(pt => pt.gateway_id === data.gatewayId);
     const snapped = snapToRoute(point.latitude, point.longitude, routePoints);
     
-    const oldMarker = trainMarkers[data.gatewayId];
+    const oldMarker = trainMarkers[slotIndex];
     if (oldMarker) oldMarker.remove();
-    trainMarkers[data.gatewayId] = L.marker(snapped, {
+    trainMarkers[slotIndex] = L.marker(snapped, {
       icon: L.divIcon({
         className: '',
         html: trainIconHtml(point.bearing),
