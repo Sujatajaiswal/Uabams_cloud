@@ -1598,8 +1598,18 @@ async def train_dashboard(train_no: str, request: Request):
     now_dt = utc_now()
     gateway_cards = []
     for gateway_id in gateway_ids:
+        latest_peak = await db.peak_records.find_one(
+            {"trainId": train_no, "gatewayId": gateway_id},
+            sort=[("createdAt", -1), ("positionMm", -1)]
+        )
+        latest_rms = await db.rms_records.find_one(
+            {"trainId": train_no, "gatewayId": gateway_id},
+            sort=[("createdAt", -1), ("positionMm", -1)]
+        )
+
         card = status_by_id.get(gateway_id)
         if card:
+            card = dict(card)
             lh = card.get("lastHeartbeat") or card.get("last_heartbeat")
             if lh:
                 lh_dt = lh
@@ -1620,14 +1630,20 @@ async def train_dashboard(train_no: str, request: Request):
                     card["online"] = False
             else:
                 card["online"] = False
-            gateway_cards.append(card)
         else:
-            gateway_cards.append({
+            card = {
                 "gatewayId": gateway_id,
                 "trainId": train_no,
                 "online": False,
                 "lastHeartbeat": None,
-            })
+            }
+
+        card["latestPeakG"] = latest_peak.get("maxPeakG") if latest_peak else latest_rms.get("maxG") if latest_rms else None
+        card["latestAlert"] = latest_peak.get("color") if latest_peak else latest_rms.get("color") if latest_rms else None
+        card["latestLatitude"] = latest_peak.get("latitude") if latest_peak else latest_rms.get("latitude") if latest_rms else None
+        card["latestLongitude"] = latest_peak.get("longitude") if latest_peak else latest_rms.get("longitude") if latest_rms else None
+
+        gateway_cards.append(card)
             
     alerts = await db.alert_events.find({"trainNo": train_no, "sessionStatus": {"$ne": "archived"}}).sort("createdAt", -1).limit(30).to_list(length=30)
     archives = await db.archives.find({"trainId": train_no}).sort("receivedAt", -1).limit(20).to_list(length=20)

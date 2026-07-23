@@ -536,12 +536,17 @@ function renderDashboard(data) {
   setHtml('gatewayList', allGatewayIds.map((gatewayId) => {
     const gw = gateways.find((item) => item.gatewayId === gatewayId) || { gatewayId, trainId: train.trainNo, online: false };
     const latest = latestAlertFor(alerts, gatewayId);
-    const alertStatus = normalizeAlert(latest?.alert);
-    const statusClass = gw.online ? 'online-box' : 'offline-box';
     
+    const latestPeakG = (gw.latestPeakG !== undefined && gw.latestPeakG !== null) ? gw.latestPeakG : (latest ? latest.peakValueG : null);
+    const latestAlertVal = gw.latestAlert ? gw.latestAlert : (latest ? latest.alert : null);
+    const latestLat = (gw.latestLatitude !== undefined && gw.latestLatitude !== null) ? gw.latestLatitude : (latest ? latest.latitude : null);
+    const latestLon = (gw.latestLongitude !== undefined && gw.latestLongitude !== null) ? gw.latestLongitude : (latest ? latest.longitude : null);
+
+    const alertStatus = normalizeAlert(latestAlertVal);
     const gatewayAlerts = alerts.filter((a) => a.gatewayId === gatewayId);
-    const severityCount = latest ? gatewayAlerts.filter((a) => normalizeAlert(a.alert) === alertStatus).length : 0;
-    const alertDisplay = latest ? `${alertStatus} (${severityCount})` : '-';
+    const severityCount = latestAlertVal ? (gatewayAlerts.length ? gatewayAlerts.filter((a) => normalizeAlert(a.alert) === alertStatus).length : 1) : 0;
+    const alertDisplay = latestAlertVal ? `${alertStatus} (${severityCount})` : '-';
+    const statusClass = gw.online ? 'online-box' : 'offline-box';
     
     return `
       <article class="gateway-card ${statusClass}">
@@ -551,12 +556,12 @@ function renderDashboard(data) {
         </div>
         <div class="gateway-kpis">
           <div><span>Train</span><strong>${train.trainNo || gw.trainId || '-'}</strong></div>
-          <div><span>Latest Peak</span><strong>${latest ? `${latest.peakValueG} G` : '-'}</strong></div>
-          <div class="alert-kpi ${latest ? alertStatus : ''}"><span>Alert</span><strong>${alertDisplay}</strong></div>
+          <div><span>Latest Peak</span><strong>${latestPeakG !== null ? `${latestPeakG} G` : '-'}</strong></div>
+          <div class="alert-kpi ${latestAlertVal ? alertStatus : ''}"><span>Alert</span><strong>${alertDisplay}</strong></div>
           <div><span>Archives</span><strong>${archiveCountFor(archives, gatewayId)}</strong></div>
         </div>
         <div>Last heartbeat: ${formatDate(gw.lastHeartbeat)}</div>
-        <div>Last alert location: ${latest ? `${latest.latitude}, ${latest.longitude}` : '-'}</div>
+        <div>Last alert location: ${latestLat && latestLon ? `${latestLat}, ${latestLon}` : '-'}</div>
       </article>
     `;
   }).join(''));
