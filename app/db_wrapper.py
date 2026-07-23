@@ -13,6 +13,7 @@ FIELD_MAP = {
     "lastHandshake": "last_handshake",
     "apiKey": "secret_key",
     "createdAt": "created_at",
+    "rawZipData": "raw_zip_data",
     "adxlState": "adxl_state",
     "adxlUptime": "adxl_uptime",
     "adxlFaults": "adxl_faults",
@@ -86,7 +87,11 @@ TABLE_COLUMNS = {
         "train_no", "gateway_id", "alert_type", "latitude", "longitude", "position_mm", "created_at",
         "session_name", "archive_sha256", "source", "peak_axis", "peak_value_g", "speed_kmph", "alert", "session_status", "archived_at"
     ],
-    "archives": ["gateway_id", "sha256", "received_at", "train_id"],
+    "archives": [
+        "gateway_id", "sha256", "received_at", "train_id", "session_name",
+        "session_status", "size_bytes", "status", "parse_warnings", "raw_zip_data"
+    ],
+    "heartbeat_logs": ["gateway_id", "train_id", "received_at", "adxl_state", "encoder_state"],
     "rms_records": [
         "train_id", "gateway_id", "session_name", "archive_sha256", "latitude", "longitude", "gps_valid",
         "bearing", "speed", "position_mm", "axes", "created_at"

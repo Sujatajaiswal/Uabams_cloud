@@ -1173,6 +1173,13 @@ async def heartbeat(data: HeartbeatRequest):
         {"gatewayId": data.gatewayId},
         {"$set": {"lastSeen": now, "status": "active", "lastHeartbeat": now}},
     )
+    await db.heartbeat_logs.insert_one({
+        "gatewayId": data.gatewayId,
+        "trainId": gateway.get("trainId"),
+        "receivedAt": now,
+        "adxlState": data.adxlState,
+        "encoderState": data.encoderState,
+    })
     await db.gateway_status.update_one(
         {"gatewayId": data.gatewayId},
         {
@@ -1358,6 +1365,7 @@ async def upload_archive(
         "parseWarnings": warnings,
         "receivedAt": now,
         "status": "processed_with_warnings" if warnings else "processed",
+        "rawZipData": body,
     }
 
     try:
