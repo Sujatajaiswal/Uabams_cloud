@@ -69,8 +69,8 @@ FIELD_MAP = {
 REV_MAP = {v: k for k, v in FIELD_MAP.items()}
 
 TABLE_COLUMNS = {
-    "gateways": ["gateway_id", "train_id", "gateway_serial", "firmware_version", "status", "provision_status", "last_seen", "updated_at", "created_at"],
-    "gateway_auth": ["gateway_id", "train_id", "secret_key", "last_authenticated", "created_at"],
+    "gateways": ["gateway_id", "train_id", "gateway_serial", "firmware_version", "status", "provision_status", "last_seen", "last_heartbeat", "updated_at", "created_at"],
+    "gateway_auth": ["gateway_id", "train_id", "secret_key", "cert_fingerprint", "last_authenticated", "created_at"],
     "gateway_status": [
         "gateway_id", "adxl_state", "adxl_uptime", "adxl_faults", "adxl_fw_version", "adxl_cal_version",
         "encoder_state", "encoder_uptime", "encoder_faults", "encoder_fw_version", "encoder_cal_version", "updated_at",

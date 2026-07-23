@@ -1100,9 +1100,19 @@ async def authenticate(data: AuthRequest):
         }}
     )
 
+    auth_doc = await db.gateway_auth.find_one({"gatewayId": gateway_id, "trainId": train_id})
+    update_set = {"lastAuthenticated": utc_now()}
+    if auth_doc:
+        fingerprint = auth_doc.get("certFingerprint")
+        if not fingerprint:
+            import hashlib
+            sec_key = auth_doc.get("secretKey") or "default_secret"
+            fingerprint = hashlib.sha256(sec_key.encode("utf-8")).hexdigest()
+        update_set["certFingerprint"] = fingerprint
+
     await db.gateway_auth.update_one(
         {"gatewayId": gateway_id, "trainId": train_id},
-        {"$set": {"lastAuthenticated": utc_now()}},
+        {"$set": update_set},
     )
 
     return {
@@ -1161,7 +1171,7 @@ async def heartbeat(data: HeartbeatRequest):
 
     await db.gateways.update_one(
         {"gatewayId": data.gatewayId},
-        {"$set": {"lastSeen": now, "status": "active"}},
+        {"$set": {"lastSeen": now, "status": "active", "lastHeartbeat": now}},
     )
     await db.gateway_status.update_one(
         {"gatewayId": data.gatewayId},
