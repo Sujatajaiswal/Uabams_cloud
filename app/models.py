@@ -22,6 +22,16 @@ class AuthRequest(BaseModel):
 class HeartbeatRequest(BaseModel):
     gatewayId: str = Field(..., examples=["GW1"])
     token: str = Field(..., examples=["jwt_token"])
+    adxlState: str | None = None
+    adxlUptime: int | None = None
+    adxlFaults: int | None = None
+    adxlFwVersion: str | None = None
+    adxlCalVersion: str | None = None
+    encoderState: str | None = None
+    encoderUptime: int | None = None
+    encoderFaults: int | None = None
+    encoderFwVersion: str | None = None
+    encoderCalVersion: str | None = None
 
 
 class CalibrationValues(BaseModel):
