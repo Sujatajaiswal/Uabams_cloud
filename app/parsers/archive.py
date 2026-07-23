@@ -326,8 +326,6 @@ def peak_records_to_alert_events(
 ) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     for record in peak_records:
-        if not record.get("alertGenerated"):
-            continue
         latitude = record.get("latitude")
         longitude = record.get("longitude")
         if latitude in (None, 0) or longitude in (None, 0):

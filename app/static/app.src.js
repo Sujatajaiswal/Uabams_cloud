@@ -745,24 +745,23 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
 
     alertPoints.forEach((point, index) => {
       const severity = normalizeAlert(point.color);
-      if (severity !== 'RED' && severity !== 'YELLOW') return;
+      if (severity !== 'RED' && severity !== 'YELLOW' && severity !== 'GREEN') return;
       const snapped = snapToRoute(point.lat, point.lon, routePoints);
       const markerPoint = jitterPoint(snapped[0], snapped[1], index);
       L.circleMarker(markerPoint, {
         radius: 8,
         color: '#ffffff',
         weight: 2.5,
-        fillColor: severity === 'RED' ? '#c24134' : '#f59e0b',
+        fillColor: severity === 'RED' ? '#c24134' : severity === 'YELLOW' ? '#f59e0b' : '#10b981',
         fillOpacity: 1,
       })
         .addTo(layer)
         .bindPopup(routePopup(point));
     });
 
-    const redAlertPoints = alertPoints.filter(point => normalizeAlert(point.color) === 'RED');
     const bounds = L.latLngBounds([
       ...routePoints.map((point) => [Number(point.lat), Number(point.lon)]),
-      ...redAlertPoints.map((point, index) => {
+      ...alertPoints.map((point, index) => {
         const snapped = snapToRoute(point.lat, point.lon, routePoints);
         return jitterPoint(snapped[0], snapped[1], index);
       }),
