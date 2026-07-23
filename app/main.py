@@ -1566,6 +1566,42 @@ async def list_trains():
     return sorted(list(unique_trains.values()), key=lambda x: x["trainNo"])
 
 
+def extract_max_g_from_axes(axes_str_or_dict) -> tuple[float | None, str | None]:
+    if not axes_str_or_dict:
+        return None, None
+    try:
+        import json
+        if isinstance(axes_str_or_dict, str):
+            axes = json.loads(axes_str_or_dict)
+        else:
+            axes = axes_str_or_dict
+        
+        max_g = 0.0
+        has_val = False
+        for axis_name, axis_data in axes.items():
+            if isinstance(axis_data, dict):
+                val = axis_data.get("peakValueG") or axis_data.get("g") or axis_data.get("value")
+                if val is not None:
+                    try:
+                        f_val = float(val)
+                        if f_val > max_g:
+                            max_g = f_val
+                            has_val = True
+                    except ValueError:
+                        pass
+        if has_val:
+            if max_g > 80.0:
+                color = "RED"
+            elif max_g > 50.0:
+                color = "YELLOW"
+            else:
+                color = "GREEN"
+            return round(max_g, 4), color
+    except Exception:
+        pass
+    return None, None
+
+
 @app.get("/api/v1/trains/{train_no}/dashboard")
 async def train_dashboard(train_no: str, request: Request):
     train = await db.trains.find_one({"trainNo": train_no})
@@ -1638,8 +1674,14 @@ async def train_dashboard(train_no: str, request: Request):
                 "lastHeartbeat": None,
             }
 
-        card["latestPeakG"] = latest_peak.get("maxPeakG") if latest_peak else latest_rms.get("maxG") if latest_rms else None
-        card["latestAlert"] = latest_peak.get("color") if latest_peak else latest_rms.get("color") if latest_rms else None
+        fallback_peak_g, fallback_alert = None, None
+        if latest_peak:
+            fallback_peak_g, fallback_alert = extract_max_g_from_axes(latest_peak.get("axes"))
+        if not fallback_peak_g and latest_rms:
+            fallback_peak_g, fallback_alert = extract_max_g_from_axes(latest_rms.get("axes"))
+
+        card["latestPeakG"] = fallback_peak_g
+        card["latestAlert"] = fallback_alert
         card["latestLatitude"] = latest_peak.get("latitude") if latest_peak else latest_rms.get("latitude") if latest_rms else None
         card["latestLongitude"] = latest_peak.get("longitude") if latest_peak else latest_rms.get("longitude") if latest_rms else None
 
@@ -1709,6 +1751,16 @@ async def gateway_details(train_no: str, gateway_id: str):
         {"trainId": train_no, "gatewayId": gateway_id},
         sort=[("createdAt", -1), ("positionMm", -1)],
     )
+    latest_peak = await db.peak_records.find_one(
+        {"trainId": train_no, "gatewayId": gateway_id},
+        sort=[("createdAt", -1), ("positionMm", -1)],
+    )
+    fallback_peak_g, fallback_alert = None, None
+    if latest_peak:
+        fallback_peak_g, fallback_alert = extract_max_g_from_axes(latest_peak.get("axes"))
+    if not fallback_peak_g and latest_rms:
+        fallback_peak_g, fallback_alert = extract_max_g_from_axes(latest_rms.get("axes"))
+
     alerts = await db.alert_events.find(
         {"trainNo": train_no, "gatewayId": gateway_id, "sessionStatus": {"$ne": "archived"}}
     ).sort("createdAt", -1).limit(20).to_list(length=20)
@@ -1726,11 +1778,11 @@ async def gateway_details(train_no: str, gateway_id: str):
             "rmsRecords": rms_count,
             "peakRecords": peak_count,
             "faultRecords": fault_count,
-            "latestPeakG": latest_alert.get("peakValueG") if latest_alert else latest_rms.get("maxG") if latest_rms else None,
-            "latestAlert": latest_alert.get("alert") if latest_alert else latest_rms.get("color") if latest_rms else None,
+            "latestPeakG": latest_alert.get("peakValueG") if latest_alert else fallback_peak_g,
+            "latestAlert": latest_alert.get("alert") if latest_alert else fallback_alert,
             "latestLocation": {
-                "latitude": latest_alert.get("latitude") if latest_alert else latest_rms.get("latitude") if latest_rms else None,
-                "longitude": latest_alert.get("longitude") if latest_alert else latest_rms.get("longitude") if latest_rms else None,
+                "latitude": latest_alert.get("latitude") if latest_alert else latest_peak.get("latitude") if latest_peak else latest_rms.get("latitude") if latest_rms else None,
+                "longitude": latest_alert.get("longitude") if latest_alert else latest_peak.get("longitude") if latest_peak else latest_rms.get("longitude") if latest_rms else None,
             },
             "latestArchive": serialize(latest_archive) if latest_archive else None,
         },
