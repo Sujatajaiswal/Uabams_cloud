@@ -1579,8 +1579,10 @@ async def train_dashboard(train_no: str, request: Request):
         else:
             train["trainName"] = "Express Train"
             
-    expected_gateways = ["GW_UABAMS_BOGIE_01", "GW_UABAMS_BOGIE_02"]
-    gateway_ids = list(dict.fromkeys([*expected_gateways, *train.get("gateways", [])]))
+    associated_gateways = await db.gateways.find({"trainId": train_no}).to_list(length=20)
+    gateway_ids = [g.get("gatewayId") for g in associated_gateways if g.get("gatewayId")]
+    if not gateway_ids:
+        gateway_ids = ["GW_UABAMS_BOGIE_01", "GW_UABAMS_BOGIE_02"]
     statuses = await db.gateway_status.find({"gatewayId": {"$in": gateway_ids}}).to_list(length=20)
     status_by_id = {item.get("gatewayId"): item for item in statuses}
     now_dt = utc_now()
