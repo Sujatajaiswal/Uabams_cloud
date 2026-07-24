@@ -149,11 +149,26 @@
       </div>
 
       <div class="alert-summary-grid">
-        <div class="alert-summary total"><span>Total Alerts</span><strong id="alertTotal">0</strong></div>
-        <div class="alert-summary red"><span>Red Alerts</span><strong id="alertRed">0</strong></div>
-        <div class="alert-summary yellow"><span>Yellow Alerts</span><strong id="alertYellow">0</strong></div>
-        <div class="alert-summary green"><span>Green Alerts</span><strong id="alertGreen">0</strong></div>
-      </div>
+    <div class="alert-summary total">
+        <span>Total Alerts</span>
+        <strong id="alertTotal">0</strong>
+    </div>
+
+    <div class="alert-summary red">
+        <span>Critical Alerts</span>
+        <strong id="alertRed">0</strong>
+    </div>
+
+    <div class="alert-summary yellow">
+        <span>Warning Alerts</span>
+        <strong id="alertYellow">0</strong>
+    </div>
+
+    <div class="alert-summary green">
+        <span>Normal Alerts</span>
+        <strong id="alertGreen">0</strong>
+    </div>
+</div>
       <div class="map-pair">
         <article class="map-card" data-map-gateway="GW_UABAMS_BOGIE_01">
           <div class="gateway-title"><span>GW1 Route Map</span><span id="gw1MapState" class="badge offline">-</span></div>
@@ -584,6 +599,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <script src="/static/app.js?v=20260720-obfuscated-v2"></script>
+  <script src="/static/app.js?v=20260724-v3"></script>
 </body>
 </html>
