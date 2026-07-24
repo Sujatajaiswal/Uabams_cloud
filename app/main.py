@@ -710,6 +710,87 @@ async def startup() -> None:
     await db.handshake_sessions.create_index("sessionId", unique=True)
     await db.handshake_sessions.create_index("createdAt", expireAfterSeconds=300)
 
+    # Auto-seed initial test data for localhost/Docker installations if database is empty
+    if settings.get("database_type") == "postgres" and db.pg_pool:
+        try:
+            async with db.pg_pool.acquire() as conn:
+                trains_count = await conn.fetchval("SELECT COUNT(*) FROM trains;")
+                if trains_count == 0:
+                    print("Empty local database detected. Seeding test data for Train 20693...")
+                    # 1. Insert Train
+                    await conn.execute("INSERT INTO trains (train_no, train_name) VALUES ('20693', 'DT express') ON CONFLICT DO NOTHING;")
+                    
+                    # 2. Insert Gateways
+                    await conn.execute("""
+                        INSERT INTO gateways (gateway_id, train_id, status, provision_status)
+                        VALUES ('GW_UABAMS_BOGIE_01', '20693', 'online', 'active'),
+                               ('GW_UABAMS_BOGIE_02', '20693', 'online', 'active')
+                        ON CONFLICT DO NOTHING;
+                    """)
+                    
+                    # 3. Insert Gateway Auth
+                    await conn.execute("""
+                        INSERT INTO gateway_auth (gateway_id, train_id, secret_key, cert_fingerprint)
+                        VALUES ('GW_UABAMS_BOGIE_01', '20693', 'd72e87a685293d12ecc14427572f1895c86b3e3a35ae248458693645c32b0ffb', NULL),
+                               ('GW_UABAMS_BOGIE_02', '20693', 'a305f8c3d73dfdc1653073e316a0737e9c5aa4b5ebb56e4afbe2f05faee5f466', NULL)
+                        ON CONFLICT DO NOTHING;
+                    """)
+                    
+                    # 4. Insert Gateway Status
+                    await conn.execute("""
+                        INSERT INTO gateway_status (gateway_id, train_id, online, adxl_state, encoder_state)
+                        VALUES ('GW_UABAMS_BOGIE_01', '20693', TRUE, 'active', 'active'),
+                               ('GW_UABAMS_BOGIE_02', '20693', TRUE, 'active', 'active')
+                        ON CONFLICT DO NOTHING;
+                    """)
+                    
+                    # 5. Insert Calibrations
+                    await conn.execute("""
+                        INSERT INTO calibrations (gateway_id)
+                        VALUES ('GW_UABAMS_BOGIE_01'), ('GW_UABAMS_BOGIE_02')
+                        ON CONFLICT DO NOTHING;
+                    """)
+                    
+                    # 6. Generate and Insert RMS Records (Route points between Shivaji Nagar and Hennur)
+                    import json
+                    rms_inserts = []
+                    for i in range(30):
+                        t = i / 29.0
+                        lat = 12.9716 + (13.035 - 12.9716) * t
+                        lon = 77.5946 + (77.64 - 77.5946) * t
+                        axes_json = json.dumps({
+                            "al_x": {"peakValueG": 1.25, "rmsValue": 0.45},
+                            "al_y": {"peakValueG": 1.10, "rmsValue": 0.38},
+                            "al_z": {"peakValueG": 0.95, "rmsValue": 0.30}
+                        })
+                        rms_inserts.append((
+                            '20693', 'GW_UABAMS_BOGIE_01', 'session_demo_1', 'sha_demo_1',
+                            lat, lon, True, 45.0, 60.0, i * 100, axes_json
+                        ))
+                        rms_inserts.append((
+                            '20693', 'GW_UABAMS_BOGIE_02', 'session_demo_1', 'sha_demo_1',
+                            lat, lon, True, 45.0, 60.0, i * 100, axes_json
+                        ))
+                    
+                    await conn.executemany("""
+                        INSERT INTO rms_records (train_id, gateway_id, session_name, archive_sha256, latitude, longitude, gps_valid, bearing, speed, position_mm, axes)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+                    """, rms_inserts)
+                    
+                    # 7. Insert Alert Events (4 normal GREEN alerts)
+                    await conn.execute("""
+                        INSERT INTO alert_events (train_no, gateway_id, alert_type, latitude, longitude, position_mm, alert, peak_value_g, peak_axis, speed_kmph, source, session_status)
+                        VALUES 
+                          ('20693', 'GW_UABAMS_BOGIE_01', 'Normal', 12.9716, 77.5946, 100, 'GREEN', 1.25, 'al_x', 60.0, 'archive', 'active'),
+                          ('20693', 'GW_UABAMS_BOGIE_01', 'Normal', 12.9716, 77.5946, 200, 'GREEN', 1.30, 'al_x', 60.0, 'archive', 'active'),
+                          ('20693', 'GW_UABAMS_BOGIE_01', 'Normal', 13.035, 77.64, 2800, 'GREEN', 1.28, 'al_x', 58.0, 'archive', 'active'),
+                          ('20693', 'GW_UABAMS_BOGIE_01', 'Normal', 13.035, 77.64, 2900, 'GREEN', 1.29, 'al_x', 59.0, 'archive', 'active');
+                    """)
+                    print("Test data seeding completed successfully!")
+        except Exception as seed_exc:
+            print(f"Error seeding test data: {seed_exc}")
+
+
 
 @app.get("/")
 async def root():
