@@ -401,7 +401,7 @@ function dashboardAlertToMapPoint(alert) {
 function jitterPoint(lat, lon, index) {
   if (!index) return [Number(lat), Number(lon)];
   const angle = (index * 2 * Math.PI) / 8;
-  const offset = 0.00015 * index;
+  const offset = 0.0004 * index;
   return [Number(lat) + offset * Math.sin(angle), Number(lon) + offset * Math.cos(angle)];
 }
 
@@ -759,15 +759,22 @@ function renderMaps(alerts, gateways, rmsPoints = [], mapAlerts = []) {
         .bindPopup(routePopup(point));
     });
 
-    const bounds = L.latLngBounds([
-      ...routePoints.map((point) => [Number(point.lat), Number(point.lon)]),
-      ...alertPoints.map((point, index) => {
-        const snapped = snapToRoute(point.lat, point.lon, routePoints);
-        return jitterPoint(snapped[0], snapped[1], index);
-      }),
-    ]);
+    let bounds;
+    if (alertPoints.length > 0) {
+      bounds = L.latLngBounds(
+        alertPoints.map((point, index) => {
+          const snapped = snapToRoute(point.lat, point.lon, routePoints);
+          return jitterPoint(snapped[0], snapped[1], index);
+        })
+      );
+    } else {
+      bounds = L.latLngBounds(
+        routePoints.map((point) => [Number(point.lat), Number(point.lon)])
+      );
+    }
+
     if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(selectedGateway ? 0.3 : 0.2), { maxZoom: 16 });
+      map.fitBounds(bounds.pad(selectedGateway ? 0.35 : 0.25), { maxZoom: 17 });
     }
   });
 
