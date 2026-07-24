@@ -1192,7 +1192,9 @@ function selectTab(tabId) {
   document.querySelectorAll('.tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('active', panel.id === tabId));
   if (tabId === 'alerts') {
-    setTimeout(() => gatewayIds.forEach((gatewayId) => maps[gatewayId]?.invalidateSize()), 120);
+    setTimeout(() => {
+      Object.values(maps).forEach((map) => map?.invalidateSize());
+    }, 120);
   }
   if (tabId === 'logs') loadLogs();
   if (tabId === 'repeated_alarm') loadRepeatedAlarmReport();
