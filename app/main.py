@@ -398,19 +398,28 @@ async def startup() -> None:
     global startup_error
     if settings["database_type"] == "postgres":
         import asyncpg
+        import asyncio
         pool = None
-        try:
-            pool = await asyncpg.create_pool(settings["database_url"])
-        except Exception as ssl_exc:
+        retries = 15
+        delay = 1
+        for i in range(retries):
             try:
-                # Fallback to SSL required mode for managed databases on Neon/Supabase/Render
-                pool = await asyncpg.create_pool(settings["database_url"], ssl="require")
-            except Exception as final_exc:
-                startup_error = f"SSL-less error: {ssl_exc} | SSL-required error: {final_exc}"
-                print(f"Warning: Failed to connect to PostgreSQL: {startup_error}")
+                pool = await asyncpg.create_pool(settings["database_url"])
+                startup_error = None
+                break
+            except Exception as ssl_exc:
+                try:
+                    pool = await asyncpg.create_pool(settings["database_url"], ssl="require")
+                    startup_error = None
+                    break
+                except Exception as final_exc:
+                    startup_error = f"SSL-less error: {ssl_exc} | SSL-required error: {final_exc}"
+                    print(f"PostgreSQL connection attempt {i+1}/{retries} failed. Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
                 
         db.pg_pool = pool
         if pool is None:
+            print(f"Warning: Failed to connect to PostgreSQL after {retries} attempts: {startup_error}")
             return
             
         try:
