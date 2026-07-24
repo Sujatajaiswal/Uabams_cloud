@@ -1,27 +1,33 @@
 services:
-  mongodb:
-    image: mongo:7
+  postgres:
+    image: postgres:16-alpine
+    container_name: uabams_postgres
     ports:
-      - "27017:27017"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: uabams_db_user
+      POSTGRES_PASSWORD: uUBZbdHXte5FYIFph5bDmx1szS0Hon6w
+      POSTGRES_DB: uabams_db
     volumes:
-      - mongo_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
 
   uabams-cloud:
     build: .
+    container_name: uabams_app
     ports:
       - "8000:8000"
     environment:
-      MONGODB_URL: mongodb://mongodb:27017/uabams
-      DATABASE_NAME: uabams
+      DATABASE_TYPE: postgres
+      DATABASE_URL: postgresql://uabams_db_user:uUBZbdHXte5FYIFph5bDmx1szS0Hon6w@postgres:5432/uabams_db
       JWT_SECRET: local-docker-change-me
       JWT_ALGORITHM: HS256
-      GATEWAY_API_KEY_GW01: d72e87a685293d12ecc14427572f1895c86b3e3a35ae248458693645c32b0ffb
-      GATEWAY_API_KEY_GW02: a305f8c3d73dfdc1653073e316a0737e9c5aa4b5ebb56e4afbe2f05faee5f466
       ADMIN_RESET_KEY: local-admin-key
       OPERATOR_USERNAME: admin
       OPERATOR_PASSWORD: admin123
     depends_on:
-      - mongodb
+      - postgres
+    restart: always
 
 volumes:
-  mongo_data:
+  postgres_data:
