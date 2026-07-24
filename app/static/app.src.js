@@ -1774,7 +1774,7 @@ async function exportCsv() {
     fromDate: $('fromDate').value,
     toDate: $('toDate').value,
     alarmType: $('alarmTypeFilter').value,
-    feedbackStatus: $('feedbackStatusFilter').value
+    feedbackStatus: null
   };
   try {
     const response = await fetch('/api/reports/alarm-log/export/csv', {
@@ -1794,7 +1794,7 @@ async function exportExcel() {
     fromDate: $('fromDate').value,
     toDate: $('toDate').value,
     alarmType: $('alarmTypeFilter').value,
-    feedbackStatus: $('feedbackStatusFilter').value
+    feedbackStatus: null
   };
   try {
     const response = await fetch('/api/reports/alarm-log/export/excel', {
@@ -1814,7 +1814,7 @@ async function exportPdf() {
     fromDate: $('fromDate').value,
     toDate: $('toDate').value,
     alarmType: $('alarmTypeFilter').value,
-    feedbackStatus: $('feedbackStatusFilter').value
+    feedbackStatus: null
   };
   try {
     const response = await fetch('/api/reports/alarm-log/export/pdf', {
