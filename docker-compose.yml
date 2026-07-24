@@ -1,17 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: uabams_postgres
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: uabams_db_user
-      POSTGRES_PASSWORD: uUBZbdHXte5FYIFph5bDmx1szS0Hon6w
-      POSTGRES_DB: uabams_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: always
-
   uabams-cloud:
     build: .
     container_name: uabams_app
@@ -19,15 +6,10 @@ services:
       - "8000:8000"
     environment:
       DATABASE_TYPE: postgres
-      DATABASE_URL: postgresql://uabams_db_user:uUBZbdHXte5FYIFph5bDmx1szS0Hon6w@postgres:5432/uabams_db
+      DATABASE_URL: postgresql://uabams_db_user:uUBZbdHXte5FYIFph5bDmx1szS0Hon6w@dpg-d9fkl1v7f7vs73bc5hk0-a.singapore-postgres.render.com/uabams_db?sslmode=require
       JWT_SECRET: local-docker-change-me
       JWT_ALGORITHM: HS256
       ADMIN_RESET_KEY: local-admin-key
       OPERATOR_USERNAME: admin
       OPERATOR_PASSWORD: admin123
-    depends_on:
-      - postgres
     restart: always
-
-volumes:
-  postgres_data:
